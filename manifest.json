@@ -17,7 +17,11 @@
   },
   "permissions": [
     "accountsRead",
-    "messagesRead"
+    "accountsFolders",
+    "addressBook",
+    "idle",
+    "messagesRead",
+    "messagesMove"
   ],
   "background": {
     "scripts": ["background.js"]
