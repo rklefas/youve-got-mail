@@ -182,7 +182,18 @@ async function getParentFolderName(fullFolderName) {
 }
 
 
+async function install_folders()
+{
+  await create_and_return_folder('AUTO-SORT/PURGE');
+}
+
+
 async function create_and_return_folder(fullFolderName, accountId = null) {
+
+  if (!fullFolderName) {
+    console.warn('create_and_return_folder: fullFolderName required');
+    return null;
+  }
 
   const folderId = await getFolderIdByName(fullFolderName);
 
@@ -195,7 +206,12 @@ async function create_and_return_folder(fullFolderName, accountId = null) {
 
   // prefer to create under the source account first
   console.log('create_and_return_folder: recursive call to create parent');
-  let parentId = create_and_return_folder(parentFolderName, accountId);
+  let parentId = await create_and_return_folder(parentFolderName, accountId);
+
+  if (!parentId) {
+    console.warn('create_and_return_folder: parentId not found');
+    return null;
+  }
 
   speak('Folder creation is disabled');
   return null;
