@@ -38,11 +38,37 @@ async function getFolderIdByName(mailboxName) {
 
 async function findSpecialFolders()
 {
+  speak('Looking for priority folders to organize');
+
   const allFolders = await messenger.folders.query();
   // prefer exact or exact-prefix match, PRIORITY folders
   const foundFolders = allFolders.filter((f) => f && f.name && f.name.startsWith('PRIORITY-'));
 
   return foundFolders;
+}
+
+
+async function findRebuildableFolders()
+{
+  speak('Looking for folders to rebuild');
+
+  const allFolders = await messenger.folders.query();
+  // prefer exact or exact-prefix match, PRIORITY folders
+  const foundFolders = allFolders.filter((f) => f && f.path && f.path.includes('[REBUILD]'));
+
+  return foundFolders;
+}
+
+
+async function findEmptyFolders()
+{
+  speak('Looking for empty folders to delete');
+
+  const allFolders = await messenger.folders.query();
+  const foundFolders = allFolders.filter((f) => f && f.path);
+  console.log('findEmptyFolders: count', foundFolders.length);
+  return [];
+//  return foundFolders;
 }
 
 
@@ -182,6 +208,20 @@ async function getParentFolderName(fullFolderName) {
 }
 
 
+function getFolderDepth(fullFolderName) {
+  let depth = fullFolderName.split('/').length - 1;
+  console.log('getFolderDepth: fullFolderName', fullFolderName, 'depth', depth);
+  return depth;
+}
+
+
+async function delete_folder(fullFolderName) {
+  console.log('delete_folder: Not implemented', fullFolderName);
+
+  return null;
+}
+
+
 async function install_folders()
 {
   await create_and_return_folder('AUTO-SORT/PURGE');
@@ -252,6 +292,15 @@ async function moveInboxMessagesOnIdle() {
 }
 
 
+
+async function getMessagesInFolder(folderName) {
+  const inboxId = await getFolderIdByName(folderName);
+  const messageList = await messenger.messages.list(inboxId);
+
+  return messageList;
+}
+
+
 async function moveSingleMessage(MessageList)
 {
   const movingMessage = MessageList.messages[0] || null;
@@ -279,8 +328,10 @@ async function bulkMoveMessages(MessageList, staticFolder) {
     return null;
   }
 
+  const newfolderId = await getFolderIdByName(staticFolder);
+
   console.log('bulkMoveMessages: moving', ids, 'to static folder', staticFolder);
-  const staticResult = await messenger.messages.move(ids, staticFolder);
+  const staticResult = await messenger.messages.move(ids, newfolderId);
   console.log('bulkMoveMessages: static move result', staticResult);
   return staticResult;
 }
@@ -402,28 +453,69 @@ messenger.messages.onMoved.addListener((originalMessages, movedMessages) => {
 
 messenger.idle.onStateChanged.addListener(async (IdleState) => {
 
-  speak('Idle state is now ' + IdleState);
+//  speak('Idle state is now ' + IdleState);
 
   if (IdleState == 'idle') {
-
-    const specialFolders = await findSpecialFolders();
-
-    if (Array.isArray(specialFolders)) {
-      for (const folder of specialFolders) {
-  //      cleanupFolder(folder.path);
-      }
-    }
-
-    moveInboxMessagesOnIdle();
+ //   runningIdle();
   }
 
 });
 
-/*
+
+async function runningIdle() {
+
+  await install_folders();
+
+  const specialFolders = await findSpecialFolders();
+
+  if (Array.isArray(specialFolders)) {
+    for (const folder of specialFolders) {
+//      cleanupFolder(folder.path);
+    }
+  }
+
+
+  const purgableFolders = await findRebuildableFolders();
+
+  if (Array.isArray(purgableFolders)) {
+    for (const folder of purgableFolders) {
+
+      let allMessages = await getMessagesInFolder(folder.path);
+      await bulkMoveMessages(allMessages, 'INBOX');
+    }
+  }
+
+  const emptyFolders = await findEmptyFolders();
+
+  if (Array.isArray(emptyFolders)) {
+    for (const folder of emptyFolders) {
+      await delete_folder(folder.path);
+    }
+  }
+  
+
+  moveInboxMessagesOnIdle();
+}
+
+
 messenger.messageDisplay.onMessagesDisplayed.addListener((_tab, messageList) => {
 
   speak('onMessagesDisplayed');
-  cleanupFolder(messageList.messages[0].folder.path);
+
+  if (getFolderDepth(messageList.messages[0].folder.path) == 1) {
+    cleanupFolder(messageList.messages[0].folder.path);
+  }
 
 });
-*/
+
+
+messenger.folders.onUpdated.addListener((originalFolder, updatedFolder) => {
+
+  speak('folder updated');
+
+  if (updatedFolder.name == 'IDLE') {
+    runningIdle();
+  }
+
+});
+
