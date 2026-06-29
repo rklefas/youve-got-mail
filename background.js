@@ -54,9 +54,10 @@ async function findRebuildableFolders()
 
   const allFolders = await messenger.folders.query();
   // prefer exact or exact-prefix match, PRIORITY folders
-  const foundFolders = allFolders.filter((f) => f && f.path && f.path.includes('[REBUILD]'));
+  const nameFolders = allFolders.filter((f) => f && f.name && f.name.includes('[REBUILD]'));
+//  const pathFolders = allFolders.filter((f) => f && f.path && f.path.includes('[REBUILD]'));
 
-  return foundFolders;
+  return nameFolders;
 }
 
 
@@ -178,6 +179,7 @@ async function pickActualFolderName(Message)
   else {
   // @todo do not create a folder for a single email in the INBOX, put in staging folder first
     fallbackFolderName = '/PYTHON-SORT/' + partialFolderName;
+    return null;
   }
 
   // create a new folder with the partial name
@@ -241,20 +243,20 @@ async function create_and_return_folder(fullFolderName, accountId = null) {
     return folderId;
   }
 
-  parentFolderName = await getParentFolderName(fullFolderName);
-  partial = fullFolderName.substring(fullFolderName.lastIndexOf('/') + 1);
+  const parentFolderName = await getParentFolderName(fullFolderName);
+  const partial = fullFolderName.substring(fullFolderName.lastIndexOf('/') + 1);
 
   // prefer to create under the source account first
   console.log('create_and_return_folder: recursive call to create parent');
-  let parentId = await create_and_return_folder(parentFolderName, accountId);
+  const parentId = await create_and_return_folder(parentFolderName, accountId);
 
   if (!parentId) {
     console.warn('create_and_return_folder: parentId not found');
     return null;
   }
 
-  speak('Folder creation is disabled');
-  return null;
+  // speak('Folder creation is disabled');
+  // return null;
 
   const created = await withTimeout(
     messenger.folders.create(parentId, partial),
@@ -282,13 +284,16 @@ async function cleanupFolder(mailboxName) {
   const messageList = await messenger.messages.list(folderId);
   console.log(messageList);
 
-  await moveSingleMessage(messageList);
+  let count = 1;
+  for (const message of messageList.messages) {
+    console.log('Email', count, 'of', messageList.messages.length);
+    await moveSingleMessage(message);
+    count++;
+  }
 }
 
 async function moveInboxMessagesOnIdle() {
-  const inboxId = await getFolderIdByName('INBOX');
-  const messageList = await messenger.messages.list(inboxId);
-  await moveSingleMessage(messageList);
+  await cleanupFolder('INBOX');
 }
 
 
@@ -301,10 +306,14 @@ async function getMessagesInFolder(folderName) {
 }
 
 
-async function moveSingleMessage(MessageList)
+async function moveSingleMessage(movingMessage)
 {
-  const movingMessage = MessageList.messages[0] || null;
   const newfolderId = await pickActualFolderName(movingMessage);
+
+  if (!newfolderId) {
+    return null;
+  }
+
   const ids = [movingMessage.id].filter(Boolean);
   let result;
 
@@ -431,25 +440,6 @@ messenger.messages.onNewMailReceived.addListener((_folder, messageList) => {
 });
 
 
-messenger.messages.onMoved.addListener((originalMessages, movedMessages) => {
-  console.log('onMoved fired', originalMessages, movedMessages);
-
-  if (!movedMessages?.messages?.length) {
-    return;
-  }
-
-  const destinationFolder = movedMessages.messages[0]?.folder;
-  const destinationName = destinationFolder?.name || '';
-
-  speak('message moved to folder');
-  speak(destinationName || 'unknown folder');
-
-  if (destinationName.startsWith('PRIORITY-')) {
-    console.log('onMoved: detected PRIORITY folder move, invoking bulkMoveMessages', destinationName);
-    bulkMoveMessages(movedMessages.messages);
-  }
-});
-
 
 messenger.idle.onStateChanged.addListener(async (IdleState) => {
 
@@ -497,7 +487,7 @@ async function runningIdle() {
   moveInboxMessagesOnIdle();
 }
 
-
+/*
 messenger.messageDisplay.onMessagesDisplayed.addListener((_tab, messageList) => {
 
   speak('onMessagesDisplayed');
@@ -507,6 +497,7 @@ messenger.messageDisplay.onMessagesDisplayed.addListener((_tab, messageList) => 
   }
 
 });
+*/
 
 
 messenger.folders.onUpdated.addListener((originalFolder, updatedFolder) => {
