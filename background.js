@@ -42,7 +42,7 @@ async function findSpecialFolders()
 
   const allFolders = await messenger.folders.query();
   // prefer exact or exact-prefix match, PRIORITY folders
-  const foundFolders = allFolders.filter((f) => f && f.name && f.name.startsWith('PRIORITY-'));
+  const foundFolders = allFolders.filter((f) => f && f.path.startsWith('/PRIORITY-') && f.name.startsWith('PRIORITY-'));
 
   return foundFolders;
 }
@@ -108,36 +108,35 @@ async function renderMessageDomain(Message) {
 
 async function getSingleEmailAddress(Message) {
 
-  const parsed = messenger.messengerUtilities.parseMailboxString(Message.author).then(function(ParsedMailboxList) {
+  const emailAddress = await messenger.messengerUtilities.parseMailboxString(Message.author).then(function(ParsedMailboxList) {
     return ParsedMailboxList[0];
   });
 
-  let emailAddress = await parsed;
-
   let emailParts = emailAddress.email.split('@');
+  let tmpDomain = emailParts[1].toLowerCase();
+  let splits = tmpDomain.split('.');
+  splits.reverse();
+
   emailAddress.email_user = emailParts[0];
   emailAddress.email_domain = emailParts[1];
+  emailAddress.email_domain_sortable = splits.join('.');
 
-  let splits = emailAddress.email_domain.split('.');
-  splits.reverse();
-  let finalDomain = splits.join('.').toLowerCase();
-  
-  emailAddress.email_domain_sortable = finalDomain;
+  if (tmpDomain == 'gmail.com')
+      emailAddress.multi_tenant_domain = true;
+  else if (tmpDomain == 'yahoo.com')
+      emailAddress.multi_tenant_domain = true;
+  else if (tmpDomain == 'wordpress.com')
+      emailAddress.multi_tenant_domain = true;
+  else if (tmpDomain == 'live.com')
+      emailAddress.multi_tenant_domain = true;
+  else if (tmpDomain == 'hotmail.com')
+      emailAddress.multi_tenant_domain = true;
+  else if (tmpDomain == 'substack.com')
+      emailAddress.multi_tenant_domain = true;
+  else
+      emailAddress.multi_tenant_domain = false;
 
-  if (emailParts[1] == 'gmail.com')
-      emailAddress.multi_tenant_domain = true;
-  else if (emailParts[1] == 'yahoo.com')
-      emailAddress.multi_tenant_domain = true;
-  else if (emailParts[1] == 'wordpress.com')
-      emailAddress.multi_tenant_domain = true;
-  else if (emailParts[1] == 'live.com')
-      emailAddress.multi_tenant_domain = true;
-  else if (emailParts[1] == 'hotmail.com')
-      emailAddress.multi_tenant_domain = true;
-  else if (emailParts[1] == 'substack.com')
-      emailAddress.multi_tenant_domain = true;
-
-  console.log(emailAddress);
+//  console.log(emailAddress);
 
   return emailAddress;
 }
@@ -164,17 +163,21 @@ async function renderMessageFolderNames(Message)
 async function pickActualFolderName(Message)
 {
   const partialFolderName = await renderMessageFolderNames(Message);
-  const domainFolder = await getParentFolderName(partialFolderName);
-  const accountId = Message?.folder?.accountId || null;
+  const domainFolder = getParentFolderName(partialFolderName);
+  const topFolder = getTopLevelFolder(Message.folder.path);
+  const accountId = Message.folder.accountId;
   const folders = await messenger.folders.query();
+  const existing = folders.find((f) => f && f.name == domainFolder);
 
   console.log('looking for ' + partialFolderName, 'accountId', accountId);
 
-
-  const existing = folders.find((f) => f && f.name == domainFolder);
-  if (existing) {
+  if (topFolder.startsWith('/PRIORITY-')) {
+    console.log('pickActualFolderName: found PRIORITY folder');
+    fallbackFolderName = topFolder + '/' + partialFolderName;
+  }
+  else if (existing) {
     console.log('pickActualFolderName: found existing folder', existing);
-    fallbackFolderName = await getParentFolderName(existing.path) + '/' + partialFolderName;
+    fallbackFolderName = getParentFolderName(existing.path) + '/' + partialFolderName;
   }
   else {
   // @todo do not create a folder for a single email in the INBOX, put in staging folder first
@@ -205,8 +208,19 @@ function withTimeout(firstPromise, ms, message) {
 }
 
 
-async function getParentFolderName(fullFolderName) {
+function getParentFolderName(fullFolderName) {
   return fullFolderName.substring(0, fullFolderName.lastIndexOf('/'));
+}
+
+
+function getTopLevelFolder(fullFolderName) {
+  if (getFolderDepth(fullFolderName) > 1) {
+    return getTopLevelFolder(getParentFolderName(fullFolderName));
+  }
+  else {
+    console.log('getTopLevelFolder:', fullFolderName);
+    return fullFolderName;    
+  }
 }
 
 
@@ -279,10 +293,7 @@ async function create_and_return_folder(fullFolderName, accountId = null) {
 async function cleanupFolder(mailboxName) {
   speak('Cleaning up ' + mailboxName + ' folder');
 
-  const folderId = await getFolderIdByName(mailboxName);
-  console.log(folderId);
-  const messageList = await messenger.messages.list(folderId);
-  console.log(messageList);
+  const messageList = await getMessagesInFolder(mailboxName);
 
   let count = 1;
   for (const message of messageList.messages) {
@@ -291,11 +302,6 @@ async function cleanupFolder(mailboxName) {
     count++;
   }
 }
-
-async function moveInboxMessagesOnIdle() {
-  await cleanupFolder('INBOX');
-}
-
 
 
 async function getMessagesInFolder(folderName) {
@@ -454,13 +460,13 @@ messenger.idle.onStateChanged.addListener(async (IdleState) => {
 
 async function runningIdle() {
 
-  await install_folders();
+//  await install_folders();
 
   const specialFolders = await findSpecialFolders();
 
   if (Array.isArray(specialFolders)) {
     for (const folder of specialFolders) {
-//      cleanupFolder(folder.path);
+      cleanupFolder(folder.path);
     }
   }
 
@@ -484,7 +490,7 @@ async function runningIdle() {
   }
   
 
-  moveInboxMessagesOnIdle();
+  await cleanupFolder('INBOX');
 }
 
 /*
