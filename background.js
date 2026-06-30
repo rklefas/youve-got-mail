@@ -163,7 +163,7 @@ async function renderMessageFolderNames(Message)
 async function pickActualFolderName(Message)
 {
   const partialFolderName = await renderMessageFolderNames(Message);
-  const domainFolder = getParentFolderName(partialFolderName);
+  const domainFolder = getParentFolderPath(partialFolderName);
   const topFolder = getTopLevelFolder(Message.folder.path);
   const accountId = Message.folder.accountId;
   const folders = await messenger.folders.query();
@@ -177,7 +177,7 @@ async function pickActualFolderName(Message)
   }
   else if (existing) {
     console.log('pickActualFolderName: found existing folder', existing);
-    fallbackFolderName = getParentFolderName(existing.path) + '/' + partialFolderName;
+    fallbackFolderName = getParentFolderPath(existing.path) + '/' + partialFolderName;
   }
   else {
   // @todo do not create a folder for a single email in the INBOX, put in staging folder first
@@ -208,14 +208,14 @@ function withTimeout(firstPromise, ms, message) {
 }
 
 
-function getParentFolderName(fullFolderName) {
+function getParentFolderPath(fullFolderName) {
   return fullFolderName.substring(0, fullFolderName.lastIndexOf('/'));
 }
 
 
 function getTopLevelFolder(fullFolderName) {
   if (getFolderDepth(fullFolderName) > 1) {
-    return getTopLevelFolder(getParentFolderName(fullFolderName));
+    return getTopLevelFolder(getParentFolderPath(fullFolderName));
   }
   else {
     console.log('getTopLevelFolder:', fullFolderName);
@@ -257,7 +257,7 @@ async function create_and_return_folder(fullFolderName, accountId = null) {
     return folderId;
   }
 
-  const parentFolderName = await getParentFolderName(fullFolderName);
+  const parentFolderName = await getParentFolderPath(fullFolderName);
   const partial = fullFolderName.substring(fullFolderName.lastIndexOf('/') + 1);
 
   // prefer to create under the source account first
@@ -425,6 +425,8 @@ async function announceMessages(messageList) {
     await speak(`You've got mail from ${sender}`);
 
     if (message.subject) {
+      await speak(`Date.`);
+      await speak(message.date.toString());
       await speak(`Subject.`);
       await speak(message.subject);
     }
@@ -493,24 +495,25 @@ async function runningIdle() {
   await cleanupFolder('INBOX');
 }
 
-/*
+
+// --------------------
+// Test Listeners
+// --------------------
+
 messenger.messageDisplay.onMessagesDisplayed.addListener((_tab, messageList) => {
 
-  speak('onMessagesDisplayed');
-
-  if (getFolderDepth(messageList.messages[0].folder.path) == 1) {
-    cleanupFolder(messageList.messages[0].folder.path);
+  if (messageList.messages[0].folder.name == 'ANNOUNCE') {
+    speak('Test announcement');
+    announceMessages(messageList);
   }
 
 });
-*/
 
 
 messenger.folders.onUpdated.addListener((originalFolder, updatedFolder) => {
 
-  speak('folder updated');
-
   if (updatedFolder.name == 'IDLE') {
+    speak('Test folder updated');
     runningIdle();
   }
 
