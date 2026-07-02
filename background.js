@@ -52,12 +52,19 @@ async function findRebuildableFolders()
 {
   speak('Looking for folders to rebuild');
 
-  const allFolders = await messenger.folders.query();
-  // prefer exact or exact-prefix match, PRIORITY folders
+  const allFolders = await messenger.folders.query({
+    hasMessages: true
+  });
+  
   const nameFolders = allFolders.filter((f) => f && f.name && f.name.includes('[REBUILD]'));
-//  const pathFolders = allFolders.filter((f) => f && f.path && f.path.includes('[REBUILD]'));
 
-  return nameFolders;
+  if (nameFolders.length == 0) {
+    const pathFolders = allFolders.filter((f) => f && f.path && f.path.includes('[REBUILD]'));
+    return pathFolders;
+  }
+  else {
+    return nameFolders;
+  }
 }
 
 
@@ -65,11 +72,23 @@ async function findEmptyFolders()
 {
   speak('Looking for empty folders to delete');
 
-  const allFolders = await messenger.folders.query();
-  const foundFolders = allFolders.filter((f) => f && f.path);
-  console.log('findEmptyFolders: count', foundFolders.length);
-  return [];
-//  return foundFolders;
+  const allFolders = await messenger.folders.query({
+    hasMessages: false,
+    hasSubFolders: false,
+    isRoot: false
+  });
+
+  let nameFolders = allFolders.filter((f) => f && f.path.includes('[REBUILD]'));
+  console.log('findEmptyFolders: rebuild = count', nameFolders);
+
+  if (nameFolders.length) {
+    return nameFolders;
+  }
+
+  nameFolders = allFolders.filter((f) => f && f.path.startsWith('/PRIORITY'));
+  console.log('findEmptyFolders: name = count', nameFolders);
+
+  return nameFolders;
 }
 
 
@@ -168,7 +187,8 @@ async function pickActualFolderName(Message)
   const accountId = Message.folder.accountId;
   const folders = await messenger.folders.query();
   const existing = folders.find((f) => f && f.name == domainFolder);
-
+  let fallbackFolderName = null;
+  
   console.log('looking for ' + partialFolderName, 'accountId', accountId);
 
   if (topFolder.startsWith('/PRIORITY-')) {
@@ -182,6 +202,11 @@ async function pickActualFolderName(Message)
   else {
   // @todo do not create a folder for a single email in the INBOX, put in staging folder first
     fallbackFolderName = '/PYTHON-SORT/' + partialFolderName;
+    return null;
+  }
+
+  if (fallbackFolderName.includes('[REBUILD]')) {
+    console.log('pickActualFolderName: cancelling folder creation');
     return null;
   }
 
@@ -420,6 +445,11 @@ async function announceMessages(messageList) {
   console.log('announceMessages: messageList', messageList);
 
   for await (const message of iterateMessagePages(messageList)) {
+
+    if (message.date.toDateString() != new Date().toDateString()) {
+      continue;
+    }
+
     const emailAddress = await getSingleEmailAddress(message);
     const sender = emailAddress.name;
     await speak(`You've got mail from ${sender}`);
