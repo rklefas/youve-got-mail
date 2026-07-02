@@ -473,8 +473,6 @@ async function announceMessages(messageList) {
     await speak(`You've got mail from ${sender}`);
 
     if (message.subject) {
-      await speak(`Date.`);
-      await speak(message.date.toString());
       await speak(`Subject.`);
       await speak(message.subject);
     }
@@ -499,10 +497,14 @@ messenger.messages.onNewMailReceived.addListener((_folder, messageList) => {
 
 messenger.idle.onStateChanged.addListener(async (IdleState) => {
 
-//  speak('Idle state is now ' + IdleState);
+  const browser = await messenger.runtime.getBrowserInfo();
+  speak(browser.name + ' is now in ' + IdleState + ' state');
 
   if (IdleState == 'idle') {
- //   runningIdle();
+    messenger.alarms.create('idle-alarm', {
+      delayInMinutes: 2,
+      periodInMinutes: 20
+    });
   }
 
 });
@@ -542,8 +544,20 @@ async function runningIdle() {
   }
   
 
-  await cleanupFolder('INBOX');
+//  await cleanupFolder('INBOX');
 }
+
+
+messenger.alarms.onAlarm.addListener((alarmObject) => {
+
+  speak(`The time is now ` + (new Date().toLocaleTimeString()) );
+  speak('Triggering: ' + alarmObject.name);
+
+  if (alarmObject.name == 'idle-alarm') {
+    runningIdle();
+  }
+
+});
 
 
 // --------------------

@@ -18,6 +18,7 @@
   "permissions": [
     "accountsRead",
     "accountsFolders",
+    "alarms",
     "idle",
     "messagesDelete",
     "messagesRead",
