@@ -256,8 +256,22 @@ function getFolderDepth(fullFolderName) {
 }
 
 
-async function delete_folder(fullFolderName) {
-  console.log('delete_folder: Not implemented', fullFolderName);
+async function delete_folder(folderObject)
+{
+  const fullFolderName = folderObject.path;
+
+  if (getFolderDepth(fullFolderName) > 1)
+  {
+    const folderInfo = await messenger.folders.getFolderInfo(folderObject.id);
+
+    if (folderInfo.totalMessageCount == 0) {
+      console.log('delete_folder:', fullFolderName);
+      await messenger.folders.delete(folderObject.id);
+    }
+  }
+  else {
+    console.log('delete_folder: skipping', fullFolderName);
+  }
 
   return null;
 }
@@ -316,9 +330,11 @@ async function create_and_return_folder(fullFolderName, accountId = null) {
 // --------------------
 
 async function cleanupFolder(mailboxName) {
-  speak('Cleaning up ' + mailboxName + ' folder');
-
   const messageList = await getMessagesInFolder(mailboxName);
+
+  if (messageList.messages.length) {
+    speak('Cleaning up ' + mailboxName + ' folder');  
+  }
 
   let count = 1;
   for (const message of messageList.messages) {
@@ -326,6 +342,8 @@ async function cleanupFolder(mailboxName) {
     await moveSingleMessage(message);
     count++;
   }
+
+  return count;
 }
 
 
@@ -510,6 +528,8 @@ async function runningIdle() {
 
       let allMessages = await getMessagesInFolder(folder.path);
       await bulkMoveMessages(allMessages, 'INBOX');
+      await delete_folder(folder);
+      break;
     }
   }
 
@@ -517,7 +537,7 @@ async function runningIdle() {
 
   if (Array.isArray(emptyFolders)) {
     for (const folder of emptyFolders) {
-      await delete_folder(folder.path);
+      await delete_folder(folder);
     }
   }
   

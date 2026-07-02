@@ -19,6 +19,7 @@
     "accountsRead",
     "accountsFolders",
     "idle",
+    "messagesDelete",
     "messagesRead",
     "messagesMove"
   ],
