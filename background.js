@@ -399,6 +399,36 @@ async function bulkMoveMessages(MessageList, staticFolder) {
 }
 
 
+// --------------------
+// Semantic Analysis
+// --------------------
+
+async function is_newsletter(Message) {
+
+  // https://webextension-api.thunderbird.net/en/mv3/messages.html#messages-headers-dictionary
+
+  const fullObject = await messenger.messages.getFull(Message.id);
+  const headers = fullObject.headers;
+
+  if (Object.hasOwn(headers, 'list-unsubscribe')) {
+    return true;
+  }
+  else if (Object.hasOwn(headers, 'list-unsubscribe-post')) {
+    return true;
+  }
+  else if (Object.hasOwn(headers, 'x-campaignid')) {
+    return true;
+  }
+  else {
+    // @todo we can check for more headers or the email content itself
+    console.log(headers);
+  }
+
+  return false;
+}
+
+
+
 
 // --------------------
 // Announce things
@@ -477,7 +507,13 @@ async function announceMessages(messageList) {
 
     const emailAddress = await getSingleEmailAddress(message);
     const sender = emailAddress.name;
-    await speak(`You've got mail from ${sender}`);
+
+    if (await is_newsletter(message)) {
+      await speak(`You've got a newsletter from ${sender}`);
+    }
+    else {
+      await speak(`You've got mail from ${sender}`);
+    }
 
     if (message.subject) {
       await speak(`Subject.`);
