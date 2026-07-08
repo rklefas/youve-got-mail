@@ -44,6 +44,10 @@ async function findSpecialFolders()
   // prefer exact or exact-prefix match, PRIORITY folders
   const foundFolders = allFolders.filter((f) => f && f.path.startsWith('/PRIORITY-') && f.name.startsWith('PRIORITY-'));
 
+  if (foundFolders.length == 0) {
+//    await install_folders();
+  }
+
   return foundFolders;
 }
 
@@ -250,7 +254,7 @@ function getTopLevelFolder(fullFolderName) {
 
 
 function getFolderDepth(fullFolderName) {
-  let depth = fullFolderName.split('/').length - 1;
+  const depth = fullFolderName.trim('/').split('/').length - 1;
   console.log('getFolderDepth: fullFolderName', fullFolderName, 'depth', depth);
   return depth;
 }
@@ -367,7 +371,7 @@ async function moveSingleMessage(movingMessage)
   let result;
 
   result = await withTimeout(
-    messenger.messages.move(ids, newfolderId, { isUserAction: true }),
+    messenger.messages.move(ids, newfolderId),
     10000,
     `moveSingleMessage: messenger.messages.move timed out after 10000ms for folder ${newfolderId}`
   );
@@ -441,6 +445,9 @@ function speak(text) {
   betterText = betterText.replace('-', ' ');
   console.log('SPEAK: ' + betterText);
 
+  // @todo lower system volume first
+  // https://developer.mozilla.org/en-US/docs/Web/API/Audio_Session_API
+
   return new Promise((resolve) => {
     const utterance = new SpeechSynthesisUtterance(betterText);
     utterance.rate = 1;
@@ -494,17 +501,27 @@ messenger.messages.onNewMailReceived.addListener((_folder, messageList) => {
 });
 
 
-
 messenger.idle.onStateChanged.addListener(async (IdleState) => {
 
   const browser = await messenger.runtime.getBrowserInfo();
-  speak(browser.name + ' is now in ' + IdleState + ' state');
+  speak(browser.name + ' is in ' + IdleState + ' state');
 
   if (IdleState == 'idle') {
+
+    const periodMinutes = 20;
+    const nowMinutes = new Date().getMinutes();
+    const reducedNowMinutes = (nowMinutes > periodMinutes) ? nowMinutes % periodMinutes : nowMinutes;
+    const delayMinutes = periodMinutes - reducedNowMinutes;
+
+    speak(`Setting alarm to trigger every ${periodMinutes} minutes, starting in ${delayMinutes} minutes.`);
+    
     messenger.alarms.create('idle-alarm', {
-      delayInMinutes: 2,
-      periodInMinutes: 20
+      delayInMinutes: delayMinutes,
+      periodInMinutes: periodMinutes
     });
+  }
+  else {
+    messenger.alarms.clear('idle-alarm');
   }
 
 });
@@ -512,7 +529,6 @@ messenger.idle.onStateChanged.addListener(async (IdleState) => {
 
 async function runningIdle() {
 
-//  await install_folders();
 
   const specialFolders = await findSpecialFolders();
 
@@ -550,7 +566,9 @@ async function runningIdle() {
 
 messenger.alarms.onAlarm.addListener((alarmObject) => {
 
-  speak(`The time is now ` + (new Date().toLocaleTimeString()) );
+  const currentTime = new Date().toLocaleTimeString()
+  const shorterTime = currentTime.replace(/:\d{2}\s/, ' '); // Remove seconds from the time string
+  speak('The time is now ' + shorterTime);
   speak('Triggering: ' + alarmObject.name);
 
   if (alarmObject.name == 'idle-alarm') {
