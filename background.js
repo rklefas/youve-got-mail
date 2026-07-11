@@ -262,6 +262,11 @@ function getFolderDepth(fullFolderName) {
 
 async function delete_folder(folderObject)
 {
+  if (allowFolderCreation() == false) {
+    speak('Folder deletion is disabled');
+    return null;
+  }
+
   const fullFolderName = folderObject.path;
 
   if (getFolderDepth(fullFolderName) > 1)
@@ -312,8 +317,10 @@ async function create_and_return_folder(fullFolderName, accountId = null) {
     return null;
   }
 
-  // speak('Folder creation is disabled');
-  // return null;
+  if (allowFolderCreation() == false) {
+    speak('Folder creation is disabled');
+    return null;
+  }
 
   const created = await withTimeout(
     messenger.folders.create(parentId, partial),
@@ -370,6 +377,11 @@ async function moveSingleMessage(movingMessage)
   const ids = [movingMessage.id].filter(Boolean);
   let result;
 
+  if (allowMessageMovement() == false) {
+    console.log('Single message movement is disabled');
+    return null;
+  }
+
   result = await withTimeout(
     messenger.messages.move(ids, newfolderId),
     10000,
@@ -392,6 +404,11 @@ async function bulkMoveMessages(MessageList, staticFolder) {
 
   const newfolderId = await getFolderIdByName(staticFolder);
 
+  if (allowMessageMovement() == false) {
+    speak('Message movement is disabled');
+    return null;
+  }
+
   console.log('bulkMoveMessages: moving', ids, 'to static folder', staticFolder);
   const staticResult = await messenger.messages.move(ids, newfolderId);
   console.log('bulkMoveMessages: static move result', staticResult);
@@ -409,20 +426,36 @@ async function is_newsletter(Message) {
 
   const fullObject = await messenger.messages.getFull(Message.id);
   const headers = fullObject.headers;
+  let newsletterHeaders = 0;
 
   if (Object.hasOwn(headers, 'list-unsubscribe')) {
-    return true;
+    newsletterHeaders++;
   }
   else if (Object.hasOwn(headers, 'list-unsubscribe-post')) {
-    return true;
+    newsletterHeaders++;
+  }
+  else if (Object.hasOwn(headers, 'list-subscribe')) {
+    newsletterHeaders++;
+  }
+  else if (Object.hasOwn(headers, 'list-id')) {
+    newsletterHeaders++;
   }
   else if (Object.hasOwn(headers, 'x-campaignid')) {
-    return true;
+    newsletterHeaders++;
+  }
+  else if (Object.hasOwn(headers, 'precedence')) {
+    if (headers.precedence == 'bulk')
+      newsletterHeaders++;
+    else if (headers.precedence == 'list')
+      newsletterHeaders++;
   }
   else {
     // @todo we can check for more headers or the email content itself
     console.log(headers);
   }
+
+  if (newsletterHeaders > 0)
+    return true;
 
   return false;
 }
@@ -525,6 +558,20 @@ async function announceMessages(messageList) {
 }
 
 
+
+// --------------------
+// Permissions
+// --------------------
+
+function allowFolderCreation() {
+  return false;
+}
+
+function allowMessageMovement() {
+  return false;
+}
+
+
 // --------------------
 // Listeners
 // --------------------
@@ -581,7 +628,7 @@ async function runningIdle() {
     for (const folder of purgableFolders) {
 
       let allMessages = await getMessagesInFolder(folder.path);
-      await bulkMoveMessages(allMessages, 'INBOX');
+      await bulkMoveMessages(allMessages, '/INBOX');
       await delete_folder(folder);
       break;
     }
@@ -632,6 +679,7 @@ messenger.folders.onUpdated.addListener((originalFolder, updatedFolder) => {
 
   if (updatedFolder.name == 'IDLE') {
     speak('Test folder updated');
+    console.log(updatedFolder);
     runningIdle();
   }
 
