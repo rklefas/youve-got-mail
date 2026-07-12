@@ -108,11 +108,11 @@ async function findEmptyFolders(accountId)
 async function findFolderIdWithPath(accountId, mailboxName) {
 
   if (!mailboxName) {
-    console.warn('findFolderIdWithPath: mailboxName required');
-    return null;
+    throw new Error('mailboxName required');
   }
 
   console.log('findFolderIdWithPath: looking for', mailboxName);
+
   const allFolders = await messenger.folders.query();
   const targetName = mailboxName.toUpperCase();
   const folders = allFolders.filter((f) => 
@@ -121,9 +121,8 @@ async function findFolderIdWithPath(accountId, mailboxName) {
   );
 
   if (folders.length > 1) {
-    console.log('Folder name is ambiguous', mailboxName);
     console.log(folders);
-    return null;
+    throw new Error('Folder name is ambiguous');
   }
 
   const folder = folders[0];
@@ -416,7 +415,7 @@ async function moveSingleMessage(movingMessage)
   const newfolderId = await pickActualFolderName(movingMessage);
 
   if (!newfolderId) {
-    return null;
+    throw new Error('Could not pick actual folder');
   }
 
   const ids = [movingMessage.id].filter(Boolean);
@@ -538,7 +537,8 @@ function formatSenderLabel(author) {
 
 function speak(text) {
 
-  var betterText = text.replace(' | ', '; ');
+  let betterText = text.trim();
+  betterText = betterText.replace(' | ', '; ');
   betterText = betterText.replace('-', ' ');
   console.log('SPEAK: ' + betterText);
 
@@ -583,8 +583,7 @@ async function announceMessages(messageList) {
     }
 
     if (message.subject) {
-      await speak(`Subject.`);
-      await speak(message.subject);
+      await speak(`Subject: ` + message.subject);
     }
 
     break; 
@@ -664,6 +663,8 @@ messenger.idle.onStateChanged.addListener(async (IdleState) => {
 
 
 async function runningIdle(accountId) {
+
+  console.log('runningIdle for account', accountId);
 
   const specialFolders = await findSpecialFolders(accountId);
 
