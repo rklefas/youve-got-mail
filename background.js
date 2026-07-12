@@ -36,13 +36,15 @@ async function getFolderIdByName(mailboxName) {
 }
 
 
-async function findSpecialFolders()
+async function findSpecialFolders(accountId)
 {
-  speak('Looking for priority folders to organize');
-
   const allFolders = await messenger.folders.query();
   // prefer exact or exact-prefix match, PRIORITY folders
-  const foundFolders = allFolders.filter((f) => f && f.path.startsWith('/PRIORITY-') && f.name.startsWith('PRIORITY-'));
+  const foundFolders = allFolders.filter((f) => f && 
+    f.accountId === accountId &&
+    f.path.startsWith('/PRIORITY-') && 
+    f.name.startsWith('PRIORITY-')
+  );
 
   if (foundFolders.length == 0) {
 //    await install_folders();
@@ -52,18 +54,23 @@ async function findSpecialFolders()
 }
 
 
-async function findRebuildableFolders()
+async function findRebuildableFolders(accountId)
 {
-  speak('Looking for folders to rebuild');
-
   const allFolders = await messenger.folders.query({
     hasMessages: true
   });
   
-  const nameFolders = allFolders.filter((f) => f && f.name && f.name.includes('[REBUILD]'));
+  const nameFolders = allFolders.filter((f) => f && 
+    f.accountId === accountId &&
+    f.name && 
+    f.name.includes('[REBUILD]')
+  );
 
   if (nameFolders.length == 0) {
-    const pathFolders = allFolders.filter((f) => f && f.path && f.path.includes('[REBUILD]'));
+    const pathFolders = allFolders.filter((f) => f && 
+      f.accountId === accountId &&  
+      f.path && f.path.includes('[REBUILD]')
+    );
     return pathFolders;
   }
   else {
@@ -72,28 +79,65 @@ async function findRebuildableFolders()
 }
 
 
-async function findEmptyFolders()
+async function findEmptyFolders(accountId)
 {
-  speak('Looking for empty folders to delete');
-
   const allFolders = await messenger.folders.query({
     hasMessages: false,
     hasSubFolders: false,
     isRoot: false
   });
 
-  let nameFolders = allFolders.filter((f) => f && f.path.includes('[REBUILD]'));
-  console.log('findEmptyFolders: rebuild = count', nameFolders);
+  let nameFolders = allFolders.filter((f) => f && 
+    f.accountId === accountId &&
+    f.path.includes('[REBUILD]')
+  );
 
   if (nameFolders.length) {
     return nameFolders;
   }
 
-  nameFolders = allFolders.filter((f) => f && f.path.startsWith('/PRIORITY'));
-  console.log('findEmptyFolders: name = count', nameFolders);
+  nameFolders = allFolders.filter((f) => f && 
+    f.accountId === accountId &&
+    f.path.startsWith('/PRIORITY')
+  );
 
   return nameFolders;
 }
+
+
+async function findFolderIdWithPath(accountId, mailboxName) {
+
+  if (!mailboxName) {
+    console.warn('findFolderIdWithPath: mailboxName required');
+    return null;
+  }
+
+  console.log('findFolderIdWithPath: looking for', mailboxName);
+  const allFolders = await messenger.folders.query();
+  const targetName = mailboxName.toUpperCase();
+  const folders = allFolders.filter((f) => 
+    f.accountId === accountId &&
+    f.path.toUpperCase() === targetName
+  );
+
+  if (folders.length > 1) {
+    console.log('Folder name is ambiguous', mailboxName);
+    console.log(folders);
+    return null;
+  }
+
+  const folder = folders[0];
+  if (!folder) {
+    console.log('findFolderIdWithPath: not found', mailboxName);
+    return null;
+  }
+  else {
+    console.log('findFolderIdWithPath: ', folder);
+  }
+
+  return folder.id;
+}
+
 
 
 // --------------------
@@ -190,7 +234,7 @@ async function pickActualFolderName(Message)
   const topFolder = getTopLevelFolder(Message.folder.path);
   const accountId = Message.folder.accountId;
   const folders = await messenger.folders.query();
-  const existing = folders.find((f) => f && f.name == domainFolder);
+  const existing = folders.find((f) => f.accountId == accountId && f.name == domainFolder);
   let fallbackFolderName = null;
   
   console.log('looking for ' + partialFolderName, 'accountId', accountId);
@@ -292,14 +336,14 @@ async function install_folders()
 }
 
 
-async function create_and_return_folder(fullFolderName, accountId = null) {
+async function create_and_return_folder(fullFolderName, accountId) {
 
   if (!fullFolderName) {
     console.warn('create_and_return_folder: fullFolderName required');
     return null;
   }
 
-  const folderId = await getFolderIdByName(fullFolderName);
+  const folderId = await findFolderIdWithPath(accountId, fullFolderName);
 
   if (folderId) {
     return folderId;
@@ -340,16 +384,17 @@ async function create_and_return_folder(fullFolderName, accountId = null) {
 //   https://webextension-api.thunderbird.net/en/mv3/messages.html
 // --------------------
 
-async function cleanupFolder(mailboxName) {
-  const messageList = await getMessagesInFolder(mailboxName);
+async function cleanupFolder(accountId, mailboxName) {
+  const messageList = await getMessagesInFolder(accountId, mailboxName);
 
-  if (messageList.messages.length) {
-    speak('Cleaning up ' + mailboxName + ' folder');  
-  }
+  speakMessageWithCounts(
+    'Moving # email(s) in ' + mailboxName + ' folder', 
+    messageList.messages.length
+  );
 
   let count = 1;
   for (const message of messageList.messages) {
-    console.log('Email', count, 'of', messageList.messages.length);
+    console.log('Moving Email', count, 'of', messageList.messages.length);
     await moveSingleMessage(message);
     count++;
   }
@@ -358,8 +403,8 @@ async function cleanupFolder(mailboxName) {
 }
 
 
-async function getMessagesInFolder(folderName) {
-  const inboxId = await getFolderIdByName(folderName);
+async function getMessagesInFolder(accountId, folderName) {
+  const inboxId = await findFolderIdWithPath(accountId, folderName);
   const messageList = await messenger.messages.list(inboxId);
 
   return messageList;
@@ -393,7 +438,7 @@ async function moveSingleMessage(movingMessage)
 }
 
 
-async function bulkMoveMessages(MessageList, staticFolder) {
+async function bulkMoveMessages(accountId, MessageList, staticFolder) {
   // normalize to an array of message objects
   const messagesArray = MessageList.messages || [];
   const ids = messagesArray.map((m) => m.id).filter(Boolean);
@@ -402,7 +447,7 @@ async function bulkMoveMessages(MessageList, staticFolder) {
     return null;
   }
 
-  const newfolderId = await getFolderIdByName(staticFolder);
+  const newfolderId = await findFolderIdWithPath(accountId, staticFolder);
 
   if (allowMessageMovement() == false) {
     speak('Message movement is disabled');
@@ -547,6 +592,25 @@ async function announceMessages(messageList) {
 }
 
 
+function speakMessageWithCounts(verbiage, count) {
+  const withNumber = verbiage.replace('#', count);
+  let finalMessage = withNumber;
+  if (count == 1) {
+    finalMessage = withNumber.replace('(s)', '');
+  }
+  else {
+    finalMessage = withNumber.replace('(s)', 's');
+  }
+
+  if (count > 0) {
+    speak(finalMessage)
+  }
+  else {
+    console.log(finalMessage)
+  }
+}
+
+
 
 // --------------------
 // Permissions
@@ -599,40 +663,35 @@ messenger.idle.onStateChanged.addListener(async (IdleState) => {
 });
 
 
-async function runningIdle() {
+async function runningIdle(accountId) {
 
+  const specialFolders = await findSpecialFolders(accountId);
 
-  const specialFolders = await findSpecialFolders();
-
-  if (Array.isArray(specialFolders)) {
-    for (const folder of specialFolders) {
-      cleanupFolder(folder.path);
-    }
+  for (const folder of specialFolders) {
+    await cleanupFolder(accountId, folder.path);
   }
 
 
-  const purgableFolders = await findRebuildableFolders();
+  const purgableFolders = await findRebuildableFolders(accountId);
+  speakMessageWithCounts('Found # folder(s) marked to rebuild', purgableFolders.length);
 
-  if (Array.isArray(purgableFolders)) {
-    for (const folder of purgableFolders) {
-
-      let allMessages = await getMessagesInFolder(folder.path);
-      await bulkMoveMessages(allMessages, '/INBOX');
-      await delete_folder(folder);
-      break;
-    }
+  for (const folder of purgableFolders) {
+    let allMessages = await getMessagesInFolder(accountId, folder.path);
+    await bulkMoveMessages(accountId, allMessages, '/INBOX');
+    await delete_folder(folder);
+    break;
   }
 
-  const emptyFolders = await findEmptyFolders();
 
-  if (Array.isArray(emptyFolders)) {
-    for (const folder of emptyFolders) {
-      await delete_folder(folder);
-    }
+  const emptyFolders = await findEmptyFolders(accountId);
+  speakMessageWithCounts('Found # empty folder(s) to delete', emptyFolders.length);
+
+  for (const folder of emptyFolders) {
+    await delete_folder(folder);
   }
-  
 
-//  await cleanupFolder('INBOX');
+
+  await cleanupFolder(accountId, '/INBOX');
 }
 
 
@@ -669,7 +728,7 @@ messenger.folders.onUpdated.addListener((originalFolder, updatedFolder) => {
   if (updatedFolder.name == 'IDLE') {
     speak('Test folder updated');
     console.log(updatedFolder);
-    runningIdle();
+    runningIdle(updatedFolder.accountId);
   }
 
 });
