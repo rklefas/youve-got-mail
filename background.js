@@ -81,6 +81,10 @@ async function findRebuildableFolders(accountId)
 
 async function findEmptyFolders(accountId)
 {
+  if (allowFolderCreation() == false) {
+    return [];
+  }
+
   const allFolders = await messenger.folders.query({
     hasMessages: false,
     hasSubFolders: false,
@@ -239,6 +243,7 @@ async function pickActualFolderName(Message)
   console.log('looking for ' + partialFolderName, 'accountId', accountId);
 
   if (topFolder.startsWith('/PRIORITY-')) {
+    // Create a subfolder under the PRIORITY folder if it exists
     console.log('pickActualFolderName: found PRIORITY folder');
     fallbackFolderName = topFolder + '/' + partialFolderName;
   }
@@ -384,7 +389,7 @@ async function create_and_return_folder(fullFolderName, accountId) {
 // --------------------
 
 async function cleanupFolder(accountId, mailboxName) {
-  const messageList = await getMessagesInFolder(accountId, mailboxName);
+  const messageList = await getMessagesInFolder(accountId, mailboxName, getEmailFetchLimit());
 
   speakMessageWithCounts(
     'Moving # email(s) in ' + mailboxName + ' folder', 
@@ -402,9 +407,20 @@ async function cleanupFolder(accountId, mailboxName) {
 }
 
 
-async function getMessagesInFolder(accountId, folderName) {
+async function getMessagesInFolder(accountId, folderName, limit = null) {
   const inboxId = await findFolderIdWithPath(accountId, folderName);
+
+  // @todo These will work for v148 and later
+  const listSortOptions = {
+    sortOrder: 'descending',
+    sortType: 'date'
+  };
+
   const messageList = await messenger.messages.list(inboxId);
+
+  if (limit > 0) {
+    messageList.messages = messageList.messages.slice(0, limit);
+  }
 
   return messageList;
 }
@@ -615,6 +631,11 @@ function speakMessageWithCounts(verbiage, count) {
 // Permissions
 // --------------------
 
+function getEmailFetchLimit() {
+  return 10;
+}
+
+
 function allowFolderCreation() {
   return false;
 }
@@ -677,7 +698,7 @@ async function runningIdle(accountId) {
   speakMessageWithCounts('Found # folder(s) marked to rebuild', purgableFolders.length);
 
   for (const folder of purgableFolders) {
-    let allMessages = await getMessagesInFolder(accountId, folder.path);
+    let allMessages = await getMessagesInFolder(accountId, folder.path, getEmailFetchLimit());
     await bulkMoveMessages(accountId, allMessages, '/INBOX');
     await delete_folder(folder);
     break;
