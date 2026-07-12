@@ -467,17 +467,6 @@ async function is_newsletter(Message) {
 // Announce things
 // --------------------
 
-async function* iterateMessagePages(messageList) {
-  let page = messageList;
-
-  do {
-    for (const message of page.messages) {
-      yield message;
-    }
-    page = page.id ? await messenger.messages.continueList(page.id) : null;
-  } while (page);
-}
-
 function formatSenderLabel(author) {
   if (!author) {
     return "unknown sender";
@@ -532,7 +521,7 @@ async function announceMessages(messageList) {
 
   console.log('announceMessages: messageList', messageList);
 
-  for await (const message of iterateMessagePages(messageList)) {
+  for (const message of messageList.messages) {
 
     if (message.date.toDateString() != new Date().toDateString()) {
       continue;
