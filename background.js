@@ -237,27 +237,42 @@ async function pickActualFolderName(Message)
   const topFolder = getTopLevelFolder(Message.folder.path);
   const accountId = Message.folder.accountId;
   const folders = await messenger.folders.query();
-  const existing = folders.find((f) => f.accountId == accountId && f.name == domainFolder);
+  const existing = folders.find((f) => 
+    f.accountId == accountId && 
+    f.name == domainFolder
+  );
   let fallbackFolderName = null;
   
   console.log('looking for ' + partialFolderName, 'accountId', accountId);
 
-  if (topFolder.startsWith('/PRIORITY-')) {
-    // Create a subfolder under the PRIORITY folder if it exists
+  if (existing) {
+    console.log('pickActualFolderName: found existing domain folder', existing);
+    fallbackFolderName = getParentFolderPath(existing.path) + '/' + partialFolderName;
+  }
+  else if (topFolder.startsWith('/PRIORITY-')) {
+    // Create a domain subfolder under the PRIORITY folder if it exists
     console.log('pickActualFolderName: found PRIORITY folder');
     fallbackFolderName = topFolder + '/' + partialFolderName;
   }
-  else if (existing) {
-    console.log('pickActualFolderName: found existing folder', existing);
-    fallbackFolderName = getParentFolderPath(existing.path) + '/' + partialFolderName;
-  }
   else {
-  // @todo do not create a folder for a single email in the INBOX, put in staging folder first
-    fallbackFolderName = '/PYTHON-SORT/' + partialFolderName;
-    return null;
+    const similarCount = await getSimilarEmailsCount(Message);
+
+    if (similarCount > 1) {
+      speakMessageWithCounts('Found # similar email(s), not creating folder', similarCount);
+      fallbackFolderName = '/PYTHON-SORT/' + partialFolderName;
+    }
+    else {
+      // do not create a folder for a single email in the INBOX, put in staging folder first
+      fallbackFolderName = '/PYTHON-SORT/UNRECOGNIZED-EMAIL';
+    }
   }
 
   if (fallbackFolderName.includes('[REBUILD]')) {
+    console.log('pickActualFolderName: cancelling folder creation');
+    return null;
+  }
+
+  if (fallbackFolderName.includes('Trash')) {
     console.log('pickActualFolderName: cancelling folder creation');
     return null;
   }
@@ -479,6 +494,28 @@ async function bulkMoveMessages(accountId, MessageList, staticFolder) {
 // --------------------
 // Semantic Analysis
 // --------------------
+
+async function getSimilarEmailsCount(Message) {
+
+  // query for the counts
+  const messageList = await messenger.messages.query({
+    accountId: Message.accountId,
+    author: Message.author,
+  });
+
+  return messageList.messages.length;
+}
+
+
+async function hasVideo(Message) {
+
+  if (Message.subject.includes('video')) {
+    return true;
+  }
+
+  return false;
+}
+
 
 async function is_newsletter(Message) {
 
