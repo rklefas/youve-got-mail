@@ -507,9 +507,15 @@ async function getSimilarEmailsCount(Message) {
 }
 
 
-async function hasVideo(Message) {
+async function hasVideo(Message)
+{
+  const lowerSubject = Message.subject.toLowerCase();
 
-  if (Message.subject.includes('video')) {
+  if (lowerSubject.includes('video')) {
+    return true;
+  }
+
+  if (lowerSubject.includes('watch now')) {
     return true;
   }
 
@@ -625,10 +631,22 @@ async function announceMessages(messageList) {
       continue;
     }
 
+    await singleAnnouncement(message);
+
+    break; 
+  }
+}
+
+
+async function singleAnnouncement(message)
+{
     const emailAddress = await getSingleEmailAddress(message);
     const sender = emailAddress.name;
 
-    if (await is_newsletter(message)) {
+    if (await hasVideo(message)) {
+      await speak(`You've got a video from ${sender}`);
+    }
+    else if (await is_newsletter(message)) {
       await speak(`You've got a newsletter from ${sender}`);
     }
     else {
@@ -638,9 +656,6 @@ async function announceMessages(messageList) {
     if (message.subject) {
       await speak(`Subject: ` + message.subject);
     }
-
-    break; 
-  }
 }
 
 
@@ -797,9 +812,11 @@ messenger.alarms.onAlarm.addListener(async (alarmObject) => {
 
 messenger.messageDisplay.onMessagesDisplayed.addListener((_tab, messageList) => {
 
-  if (messageList.messages[0].folder.name == 'ANNOUNCE') {
+  const firstMessage = messageList.messages[0];
+
+  if (firstMessage.folder.name == 'ANNOUNCE') {
     speak('Test announcement');
-    announceMessages(messageList);
+    singleAnnouncement(firstMessage);
   }
 
 });
