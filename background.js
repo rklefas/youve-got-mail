@@ -258,7 +258,7 @@ async function pickActualFolderName(Message)
     const similarCount = await getSimilarEmailsCount(Message);
 
     if (similarCount > 1) {
-      speakMessageWithCounts('Found # similar email(s), not creating folder', similarCount);
+      speakMessageWithCounts('Found # similar email(s), creating folder', similarCount);
       fallbackFolderName = '/PYTHON-SORT/' + partialFolderName;
     }
     else {
@@ -668,6 +668,23 @@ function speakMessageWithCounts(verbiage, count) {
 // Permissions
 // --------------------
 
+
+async function allowAccountManagement(accountRecord) {
+
+  if (accountRecord.name == 'ryanklefas@yahoo.com') {
+    return true;
+  }
+
+  // if (accountRecord.type == 'imap') {
+  //   return true;
+  // }
+
+  console.log(accountRecord); 
+
+  return false;
+}
+
+
 function getEmailFetchLimit() {
   return 10;
 }
@@ -687,10 +704,7 @@ function allowMessageMovement() {
 // --------------------
 
 messenger.messages.onNewMailReceived.addListener((_folder, messageList) => {
-  console.log('onNewMailReceived fired', _folder, messageList);
-  announceMessages(messageList).catch((error) => {
-    console.error("You've Got Mail (onNewMailReceived):", error);
-  });
+  announceMessages(messageList);
 });
 
 
@@ -754,7 +768,7 @@ async function runningIdle(accountId) {
 }
 
 
-messenger.alarms.onAlarm.addListener((alarmObject) => {
+messenger.alarms.onAlarm.addListener(async (alarmObject) => {
 
   const currentTime = new Date().toLocaleTimeString()
   const shorterTime = currentTime.replace(/:\d{2}\s/, ' '); // Remove seconds from the time string
@@ -762,7 +776,16 @@ messenger.alarms.onAlarm.addListener((alarmObject) => {
   speak('Triggering: ' + alarmObject.name);
 
   if (alarmObject.name == 'idle-alarm') {
-    runningIdle();
+
+    // https://webextension-api.thunderbird.net/en/mv3/accounts.html#list-includesubfolders
+
+    const accounts = await messenger.accounts.list();
+
+    for (const account of accounts) {
+      if (await allowAccountManagement(account)) {
+        await runningIdle(account.id);
+      }
+    }
   }
 
 });
