@@ -261,6 +261,9 @@ async function pickActualFolderName(Message)
       speakMessageWithCounts('Found # similar email(s), creating folder', similarCount);
       fallbackFolderName = '/PYTHON-SORT/' + partialFolderName;
     }
+    else if (await is_newsletter(Message)) {
+      fallbackFolderName = '/PYTHON-SORT/UNRECOGNIZED-NEWSLETTER';
+    }
     else {
       // do not create a folder for a single email in the INBOX, put in staging folder first
       fallbackFolderName = '/PYTHON-SORT/UNRECOGNIZED-EMAIL';
@@ -385,6 +388,8 @@ async function create_and_return_folder(fullFolderName, accountId) {
     return null;
   }
 
+  speak('Creating folder: ' + partial);
+
   const created = await withTimeout(
     messenger.folders.create(parentId, partial),
     10000,
@@ -411,12 +416,17 @@ async function cleanupFolder(accountId, mailboxName) {
     messageList.messages.length
   );
 
-  let count = 1;
+  let count = 0;
   for (const message of messageList.messages) {
+    count++;
     console.log('Moving Email', count, 'of', messageList.messages.length);
     await moveSingleMessage(message);
-    count++;
   }
+
+  speakMessageWithCounts(
+    'Finished moving # email(s)', 
+    messageList.messages.length
+  );
 
   return count;
 }
@@ -617,23 +627,22 @@ function speak(text) {
 
 async function announceMessages(messageList) {
 
-  if (!messageList?.messages?.length) {
-    return;
-  }
-
-  // @todo announce the amount of emails if more than one
-
-  console.log('announceMessages: messageList', messageList);
+  let unspokenMessages = 0;
 
   for (const message of messageList.messages) {
+    if (message.date.toDateString() == new Date().toDateString()) {
 
-    if (message.date.toDateString() != new Date().toDateString()) {
-      continue;
+      if (unspokenMessages == 0) {
+        await singleAnnouncement(message);
+      }
+      
+      unspokenMessages++;
     }
+  }
 
-    await singleAnnouncement(message);
-
-    break; 
+  // Announce the amount of emails if more than one
+  if (unspokenMessages > 1) {
+    speakMessageWithCounts('You have # new message(s)', unspokenMessages);
   }
 }
 
@@ -750,36 +759,42 @@ messenger.idle.onStateChanged.addListener(async (IdleState) => {
 
 
 async function runningIdle(accountId) {
+  try {
 
-  console.log('runningIdle for account', accountId);
+    console.log('runningIdle for account', accountId);
 
-  const specialFolders = await findSpecialFolders(accountId);
+    const specialFolders = await findSpecialFolders(accountId);
 
-  for (const folder of specialFolders) {
-    await cleanupFolder(accountId, folder.path);
+    for (const folder of specialFolders) {
+      await cleanupFolder(accountId, folder.path);
+    }
+
+
+    const purgableFolders = await findRebuildableFolders(accountId);
+    speakMessageWithCounts('Found # folder(s) marked to rebuild', purgableFolders.length);
+
+    for (const folder of purgableFolders) {
+      let allMessages = await getMessagesInFolder(accountId, folder.path, getEmailFetchLimit());
+      await bulkMoveMessages(accountId, allMessages, '/INBOX');
+      await delete_folder(folder);
+      break;
+    }
+
+
+    const emptyFolders = await findEmptyFolders(accountId);
+    speakMessageWithCounts('Found # empty folder(s) to delete', emptyFolders.length);
+
+    for (const folder of emptyFolders) {
+  //    await delete_folder(folder);
+    }
+
+    await cleanupFolder(accountId, '/INBOX');
+
   }
-
-
-  const purgableFolders = await findRebuildableFolders(accountId);
-  speakMessageWithCounts('Found # folder(s) marked to rebuild', purgableFolders.length);
-
-  for (const folder of purgableFolders) {
-    let allMessages = await getMessagesInFolder(accountId, folder.path, getEmailFetchLimit());
-    await bulkMoveMessages(accountId, allMessages, '/INBOX');
-    await delete_folder(folder);
-    break;
+  catch (error) {
+    speak('Exception occurred');
+    console.warn(error)
   }
-
-
-  const emptyFolders = await findEmptyFolders(accountId);
-  speakMessageWithCounts('Found # empty folder(s) to delete', emptyFolders.length);
-
-  for (const folder of emptyFolders) {
-    await delete_folder(folder);
-  }
-
-
-  await cleanupFolder(accountId, '/INBOX');
 }
 
 
