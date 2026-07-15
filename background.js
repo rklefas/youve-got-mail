@@ -109,36 +109,33 @@ async function findEmptyFolders(accountId)
 }
 
 
-async function findFolderIdWithPath(accountId, mailboxName) {
+async function findFolderIdWithPath(accountId, mailboxPath) {
 
-  if (!mailboxName) {
-    throw new Error('mailboxName required');
+  if (!mailboxPath) {
+    throw new Error('mailboxPath required');
   }
 
-  console.log('findFolderIdWithPath: looking for', mailboxName);
+  console.log('findFolderIdWithPath: looking for', mailboxPath);
 
   const allFolders = await messenger.folders.query();
-  const targetName = mailboxName.toUpperCase();
   const folders = allFolders.filter((f) => 
     f.accountId === accountId &&
-    f.path.toUpperCase() === targetName
+    f.path.toUpperCase() === mailboxPath.toUpperCase()
   );
 
-  if (folders.length > 1) {
+  if (!folders) {
+    throw new Error('Folder name not found');
+  }
+  else if (folders.length > 1) {
     console.log(folders);
     throw new Error('Folder name is ambiguous');
   }
-
-  const folder = folders[0];
-  if (!folder) {
-    console.log('findFolderIdWithPath: not found', mailboxName);
-    return null;
+  else if (folders.length == 1) {
+    return folders[0].id;
   }
   else {
-    console.log('findFolderIdWithPath: ', folder);
+    return null;
   }
-
-  return folder.id;
 }
 
 
@@ -304,7 +301,13 @@ function withTimeout(firstPromise, ms, message) {
 
 
 function getParentFolderPath(fullFolderName) {
-  return fullFolderName.substring(0, fullFolderName.lastIndexOf('/'));
+
+  const parentPath = fullFolderName.substring(0, fullFolderName.lastIndexOf('/'));
+
+  if (parentPath.length > 0)
+    return parentPath;
+  else
+    return '/';
 }
 
 
@@ -361,8 +364,7 @@ async function install_folders()
 async function create_and_return_folder(fullFolderName, accountId) {
 
   if (!fullFolderName) {
-    console.warn('create_and_return_folder: fullFolderName required');
-    return null;
+    throw new Error('fullFolderName required');
   }
 
   const folderId = await findFolderIdWithPath(accountId, fullFolderName);
@@ -379,8 +381,7 @@ async function create_and_return_folder(fullFolderName, accountId) {
   const parentId = await create_and_return_folder(parentFolderName, accountId);
 
   if (!parentId) {
-    console.warn('create_and_return_folder: parentId not found');
-    return null;
+    throw new Error('parentId not found');
   }
 
   if (allowFolderCreation() == false) {
