@@ -6,44 +6,14 @@ speechSynthesis.addEventListener("voiceschanged", () => {
 // Look at account
 // --------------------
 
-async function getFolderIdByName(mailboxName) {
-
-  if (!mailboxName) {
-    console.warn('getFolderIdByName: mailboxName required');
-    return null;
-  }
-
-  console.log('getFolderIdByName: looking for', mailboxName);
-  const folders = await messenger.folders.query();
-
-  // const sampleFolders = folders.slice(0, 10).map((f) => ({id: f.id, name: f.name, path: f.path, canAddSubfolders: f.canAddSubfolders, accountId: f.accountId}));
-  // console.log('getFolderIdByName: sample folders', sampleFolders);
-
-  const targetName = mailboxName.toUpperCase();
-  const folder = folders.find((f) => f && (
-    f.name === mailboxName ||
-    f.path === mailboxName ||
-    f.name?.toUpperCase() === targetName ||
-    f.path?.toUpperCase() === targetName
-  ));
-
-  if (!folder) {
-    console.log('getFolderIdByName: not found', mailboxName);
-    return null;
-  }
-
-  return folder.id;
-}
-
-
 async function findSpecialFolders(accountId)
 {
   const allFolders = await messenger.folders.query();
   // prefer exact or exact-prefix match, PRIORITY folders
   const foundFolders = allFolders.filter((f) => f && 
     f.accountId === accountId &&
-    f.path.startsWith('/PRIORITY-') && 
-    f.name.startsWith('PRIORITY-')
+    isSpecialPath(f.path) && 
+    getFolderDepth(f.path) == 1
   );
 
   if (foundFolders.length == 0) {
@@ -102,7 +72,7 @@ async function findEmptyFolders(accountId)
 
   nameFolders = allFolders.filter((f) => f && 
     f.accountId === accountId &&
-    f.path.startsWith('/PRIORITY')
+    isSpecialPath(f.path)
   );
 
   return nameFolders;
@@ -138,6 +108,11 @@ async function findFolderIdWithPath(accountId, mailboxPath) {
   }
 }
 
+
+function isSpecialPath(folderPath)
+{
+  return folderPath.startsWith('/PRIORITY-') 
+}
 
 
 // --------------------
@@ -208,6 +183,9 @@ async function getSingleEmailAddress(Message) {
   return emailAddress;
 }
 
+// @todo pick this for new domains
+// this needs to handle: gmail, wordpress, substack
+// factor in reply-to and list-id
 
 async function renderMessageFolderNamesImproved(Message)
 {
@@ -246,26 +224,26 @@ async function pickActualFolderName(Message)
     console.log('pickActualFolderName: found existing domain folder', existing);
     fallbackFolderName = getParentFolderPath(existing.path) + '/' + partialFolderName;
   }
-  else if (topFolder.startsWith('/PRIORITY-')) {
+  else if (isSpecialPath(topFolder)) {
     // Create a domain subfolder under the PRIORITY folder if it exists
     console.log('pickActualFolderName: found PRIORITY folder');
     fallbackFolderName = topFolder + '/' + partialFolderName;
   }
-  else {
+  else if (await is_newsletter(Message)) {
     const similarCount = await getSimilarEmailsCount(Message);
-
     if (similarCount > 1) {
       speakMessageWithCounts('Found # similar email(s), creating folder', similarCount);
-      fallbackFolderName = '/PYTHON-SORT/' + partialFolderName;
-    }
-    else if (await is_newsletter(Message)) {
-      fallbackFolderName = '/PYTHON-SORT/UNRECOGNIZED-NEWSLETTER';
+      fallbackFolderName = '/AUTO-SORT/' + partialFolderName;
     }
     else {
-      // do not create a folder for a single email in the INBOX, put in staging folder first
-      fallbackFolderName = '/PYTHON-SORT/UNRECOGNIZED-EMAIL';
+      fallbackFolderName = '/AUTO-SORT/UNRECOGNIZED-NEWSLETTER';
     }
   }
+  else {
+    // do not create a folder for a single email in the INBOX, put in staging folder first
+    fallbackFolderName = '/AUTO-SORT/UNRECOGNIZED-EMAIL';
+  }
+  
 
   if (fallbackFolderName.includes('[REBUILD]')) {
     console.log('pickActualFolderName: cancelling folder creation');
