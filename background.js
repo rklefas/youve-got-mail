@@ -17,7 +17,7 @@ async function findSpecialFolders(accountId)
   );
 
   if (foundFolders.length == 0) {
-    await install_folders();
+    await install_folders(accountId);
   }
 
   return foundFolders;
@@ -81,11 +81,15 @@ async function findEmptyFolders(accountId)
 
 async function findFolderIdWithPath(accountId, mailboxPath) {
 
+  if (!accountId) {
+    throw new Error('accountId required');
+  }
+
   if (!mailboxPath) {
     throw new Error('mailboxPath required');
   }
 
-  console.log('findFolderIdWithPath: looking for', mailboxPath);
+  console.log('findFolderIdWithPath: looking for', mailboxPath, '[accountId]', accountId);
 
   const allFolders = await messenger.folders.query();
   const folders = allFolders.filter((f) => 
@@ -332,13 +336,14 @@ async function delete_folder(folderObject)
 }
 
 
-async function install_folders()
+async function install_folders(accountId)
 {
-  await create_and_return_folder('/PRIORITY-HEALTH');
-  await create_and_return_folder('/PRIORITY-MONEY');
-  await create_and_return_folder('/PRIORITY-PEOPLE');
-  await create_and_return_folder('/PRIORITY-PLACES');
-  await create_and_return_folder('/PRIORITY-SPIRIT');
+  console.log('Installing folders');
+  await create_and_return_folder('/PRIORITY-HEALTH', accountId);
+  await create_and_return_folder('/PRIORITY-MONEY', accountId);
+  await create_and_return_folder('/PRIORITY-PEOPLE', accountId);
+  await create_and_return_folder('/PRIORITY-PLACES', accountId);
+  await create_and_return_folder('/PRIORITY-SPIRIT', accountId);
 }
 
 
@@ -358,6 +363,11 @@ async function create_and_return_folder(fullFolderName, accountId) {
   const partial = fullFolderName.substring(fullFolderName.lastIndexOf('/') + 1);
 
   // prefer to create under the source account first
+
+  if (fullFolderName == parentFolderName) {
+    throw new Error('Stopped recursion');
+  }
+
   console.log('create_and_return_folder: recursive call to create parent');
   const parentId = await create_and_return_folder(parentFolderName, accountId);
 
