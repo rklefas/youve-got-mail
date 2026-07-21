@@ -72,7 +72,8 @@ async function findEmptyFolders(accountId)
 
   nameFolders = allFolders.filter((f) => f && 
     f.accountId === accountId &&
-    isSpecialPath(f.path)
+    isSpecialPath(f.path) &&
+    getFolderDepth(f.path) > 1
   );
 
   return nameFolders;
@@ -798,7 +799,8 @@ async function runningIdle(accountId) {
     speakMessageWithCounts('Found # empty folder(s) to delete', emptyFolders.length);
 
     for (const folder of emptyFolders) {
-  //    await delete_folder(folder);
+      await delete_folder(folder);
+      break;
     }
 
     if (await allowInboxCleanup()) {
