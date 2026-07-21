@@ -17,7 +17,7 @@ async function findSpecialFolders(accountId)
   );
 
   if (foundFolders.length == 0) {
-//    await install_folders();
+    await install_folders();
   }
 
   return foundFolders;
@@ -302,7 +302,6 @@ function getTopLevelFolder(fullFolderName) {
 
 function getFolderDepth(fullFolderName) {
   const depth = fullFolderName.trim('/').split('/').length - 1;
-  console.log('getFolderDepth: fullFolderName', fullFolderName, 'depth', depth);
   return depth;
 }
 
@@ -335,7 +334,11 @@ async function delete_folder(folderObject)
 
 async function install_folders()
 {
-  await create_and_return_folder('AUTO-SORT/PURGE');
+  await create_and_return_folder('/PRIORITY-HEALTH');
+  await create_and_return_folder('/PRIORITY-MONEY');
+  await create_and_return_folder('/PRIORITY-PEOPLE');
+  await create_and_return_folder('/PRIORITY-PLACES');
+  await create_and_return_folder('/PRIORITY-SPIRIT');
 }
 
 
@@ -681,15 +684,11 @@ function speakMessageWithCounts(verbiage, count) {
 
 async function allowAccountManagement(accountRecord) {
 
-  if (accountRecord.name == 'ryanklefas@yahoo.com') {
+  if (accountRecord.type == 'imap') {
     return true;
   }
 
-  // if (accountRecord.type == 'imap') {
-  //   return true;
-  // }
-
-  console.log(accountRecord); 
+  console.log('Not Managing Account', accountRecord);
 
   return false;
 }
