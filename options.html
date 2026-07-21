@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>You've Got Mail Settings</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+
+      body {
+        font-family: Arial, sans-serif;
+        margin: 24px;
+        background: Canvas;
+        color: CanvasText;
+      }
+
+      .panel {
+        padding: 20px;
+        border-radius: 10px;
+        background: Panel;
+        color: CanvasText;
+        border: 1px solid ButtonBorder;
+        box-shadow: none;
+      }
+
+      h1 {
+        font-size: 1.4rem;
+      }
+
+      label {
+        display: inline-block;
+        margin: 12px 0 6px;
+      }
+
+      .checkbox-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      button {
+        margin-top: 12px;
+        padding: 8px 14px;
+        border: 1px solid ButtonBorder;
+        border-radius: 6px;
+        background: ButtonFace;
+        color: ButtonText;
+        cursor: pointer;
+      }
+
+      button:hover {
+        filter: brightness(0.96);
+      }
+
+      .status {
+        min-height: 1.2rem;
+        margin-top: 10px;
+        font-size: 0.95rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="panel">
+
+      <div class="checkbox-row">
+        <input id="allow-folder-creation" type="checkbox" />
+        <label for="allow-folder-creation">Allow automatic folder creation and deletion</label>
+      </div>
+
+      <div class="checkbox-row">
+        <input id="allow-message-movement" type="checkbox" />
+        <label for="allow-message-movement">Allow Inbox Folder Cleanup</label>
+      </div>
+
+      <div>
+          <label for="email-fetch-limit">Email fetch limit</label>
+          <input id="email-fetch-limit" type="number" min="0" max="50" value="1" />
+      </div>
+
+      <p><button id="save">Save settings</button></p>
+      <div id="status" class="status" aria-live="polite"></div>
+    </div>
+
+    <script src="options.js"></script>
+  </body>
+</html>

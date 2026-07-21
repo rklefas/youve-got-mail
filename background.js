@@ -51,7 +51,7 @@ async function findRebuildableFolders(accountId)
 
 async function findEmptyFolders(accountId)
 {
-  if (allowFolderCreation() == false) {
+  if (await allowFolderCreation() == false) {
     return [];
   }
 
@@ -309,7 +309,7 @@ function getFolderDepth(fullFolderName) {
 
 async function delete_folder(folderObject)
 {
-  if (allowFolderCreation() == false) {
+  if (await allowFolderCreation() == false) {
     speak('Folder deletion is disabled');
     return null;
   }
@@ -362,7 +362,7 @@ async function create_and_return_folder(fullFolderName, accountId) {
     throw new Error('parentId not found');
   }
 
-  if (allowFolderCreation() == false) {
+  if (await allowFolderCreation() == false) {
     speak('Folder creation is disabled');
     return null;
   }
@@ -388,7 +388,7 @@ async function create_and_return_folder(fullFolderName, accountId) {
 // --------------------
 
 async function cleanupFolder(accountId, mailboxName) {
-  const messageList = await getMessagesInFolder(accountId, mailboxName, getEmailFetchLimit());
+  const messageList = await getMessagesInFolder(accountId, mailboxName, await getEmailFetchLimit());
 
   speakMessageWithCounts(
     'Moving # email(s) in ' + mailboxName + ' folder', 
@@ -412,6 +412,11 @@ async function cleanupFolder(accountId, mailboxName) {
 
 
 async function getMessagesInFolder(accountId, folderName, limit = null) {
+
+  if (limit == 0) {
+    return [];
+  }
+
   const inboxId = await findFolderIdWithPath(accountId, folderName);
 
   // @todo These will work for v148 and later
@@ -441,7 +446,7 @@ async function moveSingleMessage(movingMessage)
   const ids = [movingMessage.id].filter(Boolean);
   let result;
 
-  if (allowMessageMovement() == false) {
+  if (await getEmailFetchLimit() == 0) {
     console.log('Single message movement is disabled');
     return null;
   }
@@ -468,7 +473,7 @@ async function bulkMoveMessages(accountId, MessageList, staticFolder) {
 
   const newfolderId = await findFolderIdWithPath(accountId, staticFolder);
 
-  if (allowMessageMovement() == false) {
+  if (await getEmailFetchLimit() == 0) {
     speak('Message movement is disabled');
     return null;
   }
@@ -593,6 +598,8 @@ function speak(text) {
   // @todo lower system volume first
   // https://developer.mozilla.org/en-US/docs/Web/API/Audio_Session_API
 
+  // https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesisUtterance
+
   return new Promise((resolve) => {
     const utterance = new SpeechSynthesisUtterance(betterText);
     utterance.rate = 1;
@@ -688,17 +695,35 @@ async function allowAccountManagement(accountRecord) {
 }
 
 
-function getEmailFetchLimit() {
-  return 10;
+const SETTINGS_KEY = 'youve-got-mail-settings';
+const DEFAULT_SETTINGS = {
+  allowFolderCreation: true,
+  allowInboxCleanup: false,
+  emailFetchLimit: 1,
+};
+
+async function getSettings() {
+  const result = await messenger.storage.local.get(SETTINGS_KEY);
+  return {
+    ...DEFAULT_SETTINGS,
+    ...(result[SETTINGS_KEY] || {}),
+  };
+}
+
+async function getEmailFetchLimit() {
+  const settings = await getSettings();
+  return Number(settings.emailFetchLimit) || DEFAULT_SETTINGS.emailFetchLimit;
 }
 
 
-function allowFolderCreation() {
-  return false;
+async function allowFolderCreation() {
+  const settings = await getSettings();
+  return Boolean(settings.allowFolderCreation);
 }
 
-function allowMessageMovement() {
-  return false;
+async function allowInboxCleanup() {
+  const settings = await getSettings();
+  return Boolean(settings.allowInboxCleanup);
 }
 
 
@@ -753,7 +778,7 @@ async function runningIdle(accountId) {
     speakMessageWithCounts('Found # folder(s) marked to rebuild', purgableFolders.length);
 
     for (const folder of purgableFolders) {
-      let allMessages = await getMessagesInFolder(accountId, folder.path, getEmailFetchLimit());
+      let allMessages = await getMessagesInFolder(accountId, folder.path, await getEmailFetchLimit());
       await bulkMoveMessages(accountId, allMessages, '/INBOX');
       await delete_folder(folder);
       break;
@@ -767,7 +792,12 @@ async function runningIdle(accountId) {
   //    await delete_folder(folder);
     }
 
-    await cleanupFolder(accountId, '/INBOX');
+    if (await allowInboxCleanup()) {
+      await cleanupFolder(accountId, '/INBOX');
+    }
+    else {
+      console.log('Not cleaning up the INBOX');
+    }
 
   }
   catch (error) {
