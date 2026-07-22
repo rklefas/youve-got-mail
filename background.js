@@ -749,9 +749,13 @@ messenger.messages.onNewMailReceived.addListener((_folder, messageList) => {
 messenger.idle.onStateChanged.addListener(async (IdleState) => {
 
   const browser = await messenger.runtime.getBrowserInfo();
-  speak(browser.name + ' is in ' + IdleState + ' state');
 
   if (IdleState == 'idle') {
+
+    const existingAlarm = await messenger.alarms.get('idle-alarm');
+
+    if (existingAlarm)
+      return;
 
     const periodMinutes = 20;
     const nowMinutes = new Date().getMinutes();
@@ -766,6 +770,7 @@ messenger.idle.onStateChanged.addListener(async (IdleState) => {
     });
   }
   else {
+    speak(browser.name + ' is now ' + IdleState);
     messenger.alarms.clear('idle-alarm');
   }
 
