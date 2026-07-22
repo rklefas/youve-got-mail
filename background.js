@@ -653,17 +653,17 @@ async function singleAnnouncement(message)
     const sender = emailAddress.name;
 
     if (await hasVideo(message)) {
-      await speak(`You've got a video from ${sender}`);
+      speak(`You've got a video from ${sender}`);
     }
     else if (await is_newsletter(message)) {
-      await speak(`You've got a newsletter from ${sender}`);
+      speak(`You've got a newsletter from ${sender}`);
     }
     else {
-      await speak(`You've got mail from ${sender}`);
+      speak(`You've got mail from ${sender}`);
     }
 
     if (message.subject) {
-      await speak(`Subject: ` + message.subject);
+      speak(`Subject: ${message.subject}`);
     }
 }
 
@@ -752,6 +752,8 @@ messenger.idle.onStateChanged.addListener(async (IdleState) => {
 
   if (IdleState == 'idle') {
 
+    // The background.js will be unloaded when the client goes idle.
+
     const existingAlarm = await messenger.alarms.get('idle-alarm');
 
     if (existingAlarm)
@@ -817,8 +819,9 @@ async function runningIdle(accountId) {
 
   }
   catch (error) {
-    speak('Exception occurred');
     console.warn(error)
+    speak('Exception occurred');
+    speak(error.message);
   }
 }
 
