@@ -205,7 +205,8 @@ async function renderMessageFolderNames(Message)
 {
   const emailAddress = await getSingleEmailAddress(Message);
   const domainFolder = emailAddress.email_domain_sortable;
-  const userFolder = Message.date.getFullYear() + ' ' + emailAddress.email_user + ' (' + emailAddress.name + ')';
+  const truncatedName = emailAddress.name.slice(0, 40);
+  const userFolder = Message.date.getFullYear() + ' ' + emailAddress.email_user + ' (' + truncatedName + ')';
   return domainFolder + '/' + userFolder;
 }
 
@@ -696,11 +697,11 @@ function speakMessageWithCounts(verbiage, count) {
 async function allowAccountManagement(accountRecord) {
 
   if (accountRecord.type == 'imap') {
+    speak('Managing mail account: ' + accountRecord.name);
     return true;
   }
 
   console.log('Not Managing Account', accountRecord);
-
   return false;
 }
 
