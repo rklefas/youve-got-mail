@@ -261,11 +261,11 @@ async function pickActualFolderName(Message)
     const similarCount = await getSimilarEmailsCount(Message);
     if (similarCount > 1) {
       speakMessageWithCounts('Found # similar email(s), creating folder', similarCount);
-      fallbackFolderName = '/AUTO-MESSAGES/' + partialFolderName;
+      fallbackFolderName = '/AUTO-SORT/' + partialFolderName;
     }
     else {
       // do not create a folder for a single email in the INBOX, put in staging folder first
-      fallbackFolderName = '/AUTO-MESSAGES/UNRECOGNIZED-EMAIL';
+      fallbackFolderName = '/AUTO-SORT/UNRECOGNIZED-EMAIL';
     }
   }
   
