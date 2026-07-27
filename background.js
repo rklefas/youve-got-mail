@@ -205,8 +205,20 @@ async function renderMessageFolderNames(Message)
 {
   const emailAddress = await getSingleEmailAddress(Message);
   const domainFolder = emailAddress.email_domain_sortable;
-  const truncatedName = emailAddress.name.slice(0, 40);
-  const userFolder = Message.date.getFullYear() + ' ' + emailAddress.email_user + ' (' + truncatedName + ')';
+  let userFolder;
+
+  if (await is_newsletter(Message)) {
+    userFolder = Message.date.getFullYear() + ' ';
+  }
+  else {
+    userFolder = '(Messages) ';
+  }
+
+  userFolder += emailAddress.email_user;
+
+  if (emailAddress.name)
+    userFolder += ' (' + emailAddress.name.slice(0, 40) + ')';
+  
   return domainFolder + '/' + userFolder;
 }
 
@@ -246,8 +258,15 @@ async function pickActualFolderName(Message)
     }
   }
   else {
-    // do not create a folder for a single email in the INBOX, put in staging folder first
-    fallbackFolderName = '/AUTO-SORT/UNRECOGNIZED-EMAIL';
+    const similarCount = await getSimilarEmailsCount(Message);
+    if (similarCount > 1) {
+      speakMessageWithCounts('Found # similar email(s), creating folder', similarCount);
+      fallbackFolderName = '/AUTO-MESSAGES/' + partialFolderName;
+    }
+    else {
+      // do not create a folder for a single email in the INBOX, put in staging folder first
+      fallbackFolderName = '/AUTO-MESSAGES/UNRECOGNIZED-EMAIL';
+    }
   }
   
 
@@ -651,7 +670,7 @@ async function announceMessages(messageList) {
 async function singleAnnouncement(message)
 {
     const emailAddress = await getSingleEmailAddress(message);
-    const sender = emailAddress.name;
+    const sender = emailAddress.name ? emailAddress.name : emailAddress.email;
 
     if (await hasVideo(message)) {
       speak(`You've got a video from ${sender}`);
