@@ -280,8 +280,20 @@ async function pickActualFolderName(Message)
     return null;
   }
 
+  let createdId = null;
+
+  try {
+    createdId = await create_and_return_folder(fallbackFolderName, accountId);
+  }
+  catch (error) {
+    console.warn(error)
+    speak('Exception occurred');
+    speak(error.message);
+
+    createdId = await create_and_return_folder('/AUTO-SORT/ERROR-ENCOUNTERED', accountId);
+  }
+
   // create a new folder with the partial name
-  const createdId = await create_and_return_folder(fallbackFolderName, accountId);
   return createdId;
 }
 
@@ -380,8 +392,8 @@ async function create_and_return_folder(fullFolderName, accountId) {
     return folderId;
   }
 
-  const parentFolderName = await getParentFolderPath(fullFolderName);
-  const partial = fullFolderName.substring(fullFolderName.lastIndexOf('/') + 1);
+  const parentFolderName = getParentFolderPath(fullFolderName);
+  const singleFolderName = fullFolderName.substring(fullFolderName.lastIndexOf('/') + 1);
 
   // prefer to create under the source account first
 
@@ -401,12 +413,12 @@ async function create_and_return_folder(fullFolderName, accountId) {
     return null;
   }
 
-  speak('Creating folder: ' + partial);
+  speak('Creating folder: ' + singleFolderName);
 
   const created = await withTimeout(
-    messenger.folders.create(parentId, partial),
+    messenger.folders.create(parentId, singleFolderName),
     10000,
-    `create_and_return_folder: messenger.folders.create timed out after 10000ms for folder ${partial}`
+    `create_and_return_folder: messenger.folders.create timed out after 10000ms for folder ${singleFolderName}`
   );
   console.log('create_and_return_folder: created result', created);
   return (created) ? created.id : created;
