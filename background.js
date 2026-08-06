@@ -435,9 +435,10 @@ async function create_and_return_folder(fullFolderName, accountId) {
 
 async function cleanupFolder(accountId, mailboxName) {
   const messageList = await getMessagesInFolder(accountId, mailboxName, await getEmailFetchLimit());
+  const accountName = await getAccountName(accountId);
 
   speakMessageWithCounts(
-    'Moving # email(s) in ' + mailboxName + ' folder', 
+    'Moving # email(s) in '  + accountName + ' ' + mailboxName + ' folder', 
     messageList.messages.length
   );
 
@@ -454,6 +455,11 @@ async function cleanupFolder(accountId, mailboxName) {
   );
 
   return count;
+}
+
+
+async function getAccountName(accountId) {
+  return 'Email ' + accountId;
 }
 
 
@@ -728,7 +734,7 @@ function speakMessageWithCounts(verbiage, count) {
 async function allowAccountManagement(accountRecord) {
 
   if (accountRecord.type == 'imap') {
-    speak('Managing mail account: ' + accountRecord.name);
+    console.log('Managing mail account: ' + accountRecord.name);
     return true;
   }
 
