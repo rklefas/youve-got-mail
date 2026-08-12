@@ -640,17 +640,20 @@ function formatSenderLabel(author) {
   return author;
 }
 
-function speak(text) {
+async function speak(text) {
 
   let betterText = text.trim();
   betterText = betterText.replace(' | ', '; ');
   betterText = betterText.replace('-', ' ');
+
+  const settings = await getSettings();
+
+  if (!settings.speakEnabled) {
+    console.log('SPEAK(DISABLED): ' + betterText);
+    return;
+  }
+
   console.log('SPEAK: ' + betterText);
-
-  // @todo lower system volume first
-  // https://developer.mozilla.org/en-US/docs/Web/API/Audio_Session_API
-
-  // https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesisUtterance
 
   return new Promise((resolve) => {
     const utterance = new SpeechSynthesisUtterance(betterText);
@@ -748,6 +751,8 @@ const DEFAULT_SETTINGS = {
   allowFolderCreation: true,
   allowInboxCleanup: false,
   emailFetchLimit: 1,
+  periodMinutes: 2,
+  speakEnabled: true,
 };
 
 async function getSettings() {
@@ -763,6 +768,14 @@ async function getEmailFetchLimit() {
   return Number(settings.emailFetchLimit) || DEFAULT_SETTINGS.emailFetchLimit;
 }
 
+async function getPeriodMinutes() {
+  const settings = await getSettings();
+  const parsed = Number.parseInt(settings.periodMinutes, 10);
+  if (Number.isInteger(parsed) && parsed > 0) {
+    return parsed;
+  }
+  return DEFAULT_SETTINGS.periodMinutes;
+}
 
 async function allowFolderCreation() {
   const settings = await getSettings();
@@ -797,7 +810,12 @@ messenger.idle.onStateChanged.addListener(async (IdleState) => {
     if (existingAlarm)
       return;
 
-    const periodMinutes = 20;
+    // set this low and the system will act in 
+    // a continuous process that is easy to follow by listening
+
+    // @todo add speech verbosity
+
+    const periodMinutes = await getPeriodMinutes();
     const nowMinutes = new Date().getMinutes();
     const reducedNowMinutes = (nowMinutes > periodMinutes) ? nowMinutes % periodMinutes : nowMinutes;
     const delayMinutes = periodMinutes - reducedNowMinutes;

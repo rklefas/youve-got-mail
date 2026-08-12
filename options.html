@@ -73,9 +73,19 @@
         <label for="allow-message-movement">Allow Inbox Folder Cleanup</label>
       </div>
 
+      <div class="checkbox-row">
+        <input id="enable-speech" type="checkbox" />
+        <label for="enable-speech">Enable speech announcements</label>
+      </div>
+
       <div>
           <label for="email-fetch-limit">Email fetch limit</label>
           <input id="email-fetch-limit" type="number" min="0" max="50" value="1" />
+      </div>
+
+      <div>
+          <label for="period-minutes">Idle check interval (minutes)</label>
+          <input id="period-minutes" type="number" min="1" step="1" value="2" />
       </div>
 
       <p><button id="save">Save settings</button></p>
