@@ -215,10 +215,17 @@ async function renderMessageFolderNames(Message)
   }
 
   userFolder += emailAddress.email_user;
+  let namePart = emailAddress.name;
 
-  if (emailAddress.name)
-    userFolder += ' (' + emailAddress.name.slice(0, 40) + ')';
-  
+  if (namePart) {
+    namePart = namePart.replace(/[^a-zA-Z0-9 ()',.&-]/g, '');
+    namePart = namePart.replace('  ', ' ');
+    namePart = namePart.trim();
+    namePart = namePart.slice(0, 40)
+    namePart = namePart.trim();
+    userFolder += ' (' + namePart + ')';
+  }
+    
   return domainFolder + '/' + userFolder;
 }
 
