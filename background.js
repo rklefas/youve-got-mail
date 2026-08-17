@@ -294,8 +294,7 @@ async function pickActualFolderName(Message)
   }
   catch (error) {
     console.warn(error)
-    speak('Exception occurred');
-    speak(error.message);
+    alwaysSpeak(error.message);
 
     createdId = await create_and_return_folder('/AUTO-SORT/ERROR-ENCOUNTERED', accountId);
   }
@@ -647,7 +646,13 @@ function formatSenderLabel(author) {
   return author;
 }
 
-async function speak(text) {
+
+async function alwaysSpeak(text) {
+  await speak(text, 9)
+}
+
+
+async function speak(text, verbosity = 1) {
 
   let betterText = text.trim();
   betterText = betterText.replace(' | ', '; ');
@@ -655,9 +660,11 @@ async function speak(text) {
 
   const settings = await getSettings();
 
-  if (!settings.speakEnabled) {
-    console.log('SPEAK(DISABLED): ' + betterText);
-    return;
+  if (verbosity < 9) { 
+    if (!settings.speakEnabled) {
+      console.log('SPEAK(DISABLED): ' + betterText);
+      return;
+    }
   }
 
   console.log('SPEAK: ' + betterText);
@@ -882,9 +889,8 @@ async function runningIdle(accountId) {
 
   }
   catch (error) {
-    console.warn(error)
-    speak('Exception occurred');
-    speak(error.message);
+    console.warn(error);
+    alwaysSpeak(error.message);
   }
 }
 
@@ -921,7 +927,7 @@ messenger.messageDisplay.onMessagesDisplayed.addListener((_tab, messageList) => 
   const firstMessage = messageList.messages[0];
 
   if (firstMessage.folder.name == 'ANNOUNCE') {
-    speak('Test announcement');
+    alwaysSpeak('Test announcement');
     singleAnnouncement(firstMessage);
   }
 
@@ -931,7 +937,7 @@ messenger.messageDisplay.onMessagesDisplayed.addListener((_tab, messageList) => 
 messenger.folders.onUpdated.addListener((originalFolder, updatedFolder) => {
 
   if (updatedFolder.name == 'IDLE') {
-    speak('Test folder updated');
+    alwaysSpeak('Test folder updated');
     console.log(updatedFolder);
     runningIdle(updatedFolder.accountId);
   }
