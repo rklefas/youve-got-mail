@@ -444,8 +444,8 @@ async function cleanupFolder(accountId, mailboxName) {
   const accountName = await getAccountName(accountId);
 
   speakMessageWithCounts(
-    'Moving # email(s) in '  + accountName + ' ' + mailboxName + ' folder', 
-    messageList.messages.length
+    'Found # email(s) in ' + accountName + ' ' + mailboxName + ' folder',
+    messageList.totalCount
   );
 
   let count = 0;
@@ -484,6 +484,15 @@ async function getMessagesInFolder(accountId, folderName, limit = null) {
   };
 
   const messageList = await messenger.messages.list(inboxId);
+  let totalCount = messageList.messages.length;
+  let nextMessageList = messageList;
+
+  while (nextMessageList.id) {
+    nextMessageList = await messenger.messages.continueList(nextMessageList.id);
+    totalCount += nextMessageList.messages.length;
+  }
+
+  messageList.totalCount = totalCount;
 
   if (limit > 0) {
     messageList.messages = messageList.messages.slice(0, limit);
@@ -863,11 +872,15 @@ async function runningIdle(accountId) {
 
     const purgableFolders = await findRebuildableFolders(accountId);
     speakMessageWithCounts('Found # folder(s) marked to rebuild', purgableFolders.length);
+    let movedEmailsCount = 0;
 
     for (const folder of purgableFolders) {
-      let allMessages = await getMessagesInFolder(accountId, folder.path, await getEmailFetchLimit());
-      await bulkMoveMessages(accountId, allMessages, '/INBOX');
-      await delete_folder(folder);
+      movedEmailsCount = await cleanupFolder(accountId, folder.path);
+
+      if (movedEmailsCount == 0) {
+        await delete_folder(folder);
+      }
+
       break;
     }
 
