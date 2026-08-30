@@ -55,10 +55,13 @@ async function findEmptyFolders(accountId)
     return [];
   }
 
+  const oneWeekAgo = new Date(Date.now() - (7 * 24 * 60 * 60 * 1000));
+
   const allFolders = await messenger.folders.query({
     hasMessages: false,
     hasSubFolders: false,
-    isRoot: false
+    isRoot: false,
+    lastUsed: { before: oneWeekAgo }
   });
 
   let nameFolders = allFolders.filter((f) => f && 
@@ -363,7 +366,7 @@ async function delete_folder(folderObject)
     const folderInfo = await messenger.folders.getFolderInfo(folderObject.id);
 
     if (folderInfo.totalMessageCount == 0) {
-      console.log('delete_folder:', fullFolderName);
+      console.log('delete_folder:', folderObject, folderInfo);
       await messenger.folders.delete(folderObject.id);
     }
   }
