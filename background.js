@@ -356,7 +356,7 @@ async function delete_folder(folderObject)
 {
   if (await allowFolderCreation() == false) {
     speak('Folder deletion is disabled');
-    return null;
+    return false;
   }
 
   const fullFolderName = folderObject.path;
@@ -364,17 +364,19 @@ async function delete_folder(folderObject)
   if (getFolderDepth(fullFolderName) > 1)
   {
     const folderInfo = await messenger.folders.getFolderInfo(folderObject.id);
+    const lastUsed = folderInfo.lastUsed ? new Date(folderInfo.lastUsed) : null;
+    const oneWeekAgo = new Date(Date.now() - (7 * 24 * 60 * 60 * 1000));
 
-    if (folderInfo.totalMessageCount == 0) {
+    if (folderInfo.totalMessageCount == 0 && lastUsed && lastUsed < oneWeekAgo) {
       console.log('delete_folder:', folderObject, folderInfo);
       await messenger.folders.delete(folderObject.id);
+
+      return true;
     }
   }
-  else {
-    console.log('delete_folder: skipping', fullFolderName);
-  }
 
-  return null;
+  console.log('delete_folder: skipping', fullFolderName);
+  return false;
 }
 
 
