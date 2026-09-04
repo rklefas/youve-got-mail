@@ -12,7 +12,7 @@ async function findSpecialFolders(accountId)
   // prefer exact or exact-prefix match, PRIORITY folders
   const foundFolders = allFolders.filter((f) => f && 
     f.accountId === accountId &&
-    isSpecialPath(f.path) && 
+    isManagedPath(f.path) && 
     getFolderDepth(f.path) == 1
   );
 
@@ -61,7 +61,9 @@ async function findEmptyFolders(accountId)
     hasMessages: false,
     hasSubFolders: false,
     isRoot: false,
-    lastUsed: { before: oneWeekAgo }
+    lastUsed: { 
+      before: oneWeekAgo 
+    }
   });
 
   let nameFolders = allFolders.filter((f) => f && 
@@ -75,7 +77,7 @@ async function findEmptyFolders(accountId)
 
   nameFolders = allFolders.filter((f) => f && 
     f.accountId === accountId &&
-    isSpecialPath(f.path) &&
+    isManagedPath(f.path) &&
     getFolderDepth(f.path) > 1
   );
 
@@ -117,9 +119,16 @@ async function findFolderIdWithPath(accountId, mailboxPath) {
 }
 
 
-function isSpecialPath(folderPath)
+function isManagedPath(folderPath)
 {
-  return folderPath.startsWith('/PRIORITY-') 
+  if (folderPath.startsWith('/CATEGORY-'))
+    return true;
+  else if (folderPath.startsWith('/AUTO-'))
+    return true;
+  else if (folderPath.startsWith('/PRIORITY-'))
+    return true;
+  else
+    return false;
 }
 
 
@@ -197,10 +206,25 @@ async function getSingleEmailAddress(Message) {
 
 async function renderMessageFolderNamesImproved(Message)
 {
-  const domainFolder = await renderMessageDomain(Message);
-  const emailAddress = await getSingleEmailAddress(Message);
-  const userFolder = emailAddress.name + ' ' + Message.date.getFullYear();
-  return domainFolder + '/' + userFolder;
+  let fullname = Message.author;
+  fullname = fullname.replace('<', '[');
+  fullname = fullname.replace('>', ']');
+  fullname = fullname.trim();
+
+  if (fullname != fullname.replace(/[^a-zA-Z0-9 ()',.&-@]/g, '')) {
+    return 'ERROR-EXTRA-CHARS';
+  }
+
+  fullname = fullname.replace('  ', ' ');
+
+  if (fullname.length > 70) {
+    fullname = fullname.slice(0, 70);
+    fullname = fullname.trim();
+
+    return 'ERROR-LONG-NAME';
+  }
+
+  return fullname;
 }
 
 
@@ -235,14 +259,14 @@ async function renderMessageFolderNames(Message)
 
 async function pickActualFolderName(Message)
 {
-  const partialFolderName = await renderMessageFolderNames(Message);
-  const domainFolder = getParentFolderPath(partialFolderName);
+  const partialFolderName = await renderMessageFolderNamesImproved(Message);
   const topFolder = getTopLevelFolder(Message.folder.path);
   const accountId = Message.folder.accountId;
   const folders = await messenger.folders.query();
   const existing = folders.find((f) => 
     f.accountId == accountId && 
-    f.name == domainFolder
+    isManagedPath(f.path) &&
+    f.name == partialFolderName
   );
   let fallbackFolderName = null;
   
@@ -252,9 +276,9 @@ async function pickActualFolderName(Message)
     console.log('pickActualFolderName: found existing domain folder', existing);
     fallbackFolderName = getParentFolderPath(existing.path) + '/' + partialFolderName;
   }
-  else if (isSpecialPath(topFolder)) {
-    // Create a domain subfolder under the PRIORITY folder if it exists
-    console.log('pickActualFolderName: found PRIORITY folder');
+  else if (isManagedPath(topFolder)) {
+    // Create a domain subfolder under the TOP folder if it exists
+    console.log('pickActualFolderName: found TOP LEVEL folder');
     fallbackFolderName = topFolder + '/' + partialFolderName;
   }
   else if (await is_newsletter(Message)) {
@@ -444,6 +468,24 @@ async function create_and_return_folder(fullFolderName, accountId) {
 //   https://webextension-api.thunderbird.net/en/mv3/messages.html
 // --------------------
 
+function isMessageMovable(message) {
+  return true;
+
+  if (!message || !message.date) {
+    return false;
+  }
+
+  const messageDate = message.date instanceof Date ? message.date : new Date(message.date);
+
+  if (Number.isNaN(messageDate.getTime())) {
+    return false;
+  }
+
+  const oneDayMs = 24 * 60 * 60 * 1000;
+  return (Date.now() - messageDate.getTime()) >= oneDayMs;
+}
+
+
 async function cleanupFolder(accountId, mailboxName) {
   const messageList = await getMessagesInFolder(accountId, mailboxName, await getEmailFetchLimit());
   const accountName = await getAccountName(accountId);
@@ -489,18 +531,24 @@ async function getMessagesInFolder(accountId, folderName, limit = null) {
   };
 
   const messageList = await messenger.messages.list(inboxId);
-  let totalCount = messageList.messages.length;
+  let totalCount = 0;
   let nextMessageList = messageList;
+
+  messageList.messages = messageList.messages.filter((message) => isMessageMovable(message));
+  totalCount += messageList.messages.length;
 
   while (nextMessageList.id) {
     nextMessageList = await messenger.messages.continueList(nextMessageList.id);
-    totalCount += nextMessageList.messages.length;
+    const movableMessages = nextMessageList.messages.filter((message) => isMessageMovable(message));
+    messageList.messages.push(...movableMessages);
+    totalCount += movableMessages.length;
   }
 
   messageList.totalCount = totalCount;
 
   if (limit > 0) {
     messageList.messages = messageList.messages.slice(0, limit);
+    messageList.totalCount = messageList.messages.length;
   }
 
   return messageList;
@@ -882,11 +930,12 @@ async function runningIdle(accountId) {
     for (const folder of purgableFolders) {
       movedEmailsCount = await cleanupFolder(accountId, folder.path);
 
-      if (movedEmailsCount == 0) {
-        await delete_folder(folder);
+      if (movedEmailsCount > 0) {
+        break;
       }
-
-      break;
+      else if (await delete_folder(folder) == true) {
+        break;
+      }
     }
 
 
